@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "version": "2026.07.31.1",
+  "min_es4all_version": "1.1",
+  "files": [
+    { "path": "common/es-resources/audio_outputs.cfg", "md5": "316cd6560e6e459c2a9c1ec94550099d", "size": 4645 }
+  ]
+}
