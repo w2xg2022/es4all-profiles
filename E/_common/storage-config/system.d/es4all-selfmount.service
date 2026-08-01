@@ -1,0 +1,22 @@
+# es4all: 开机把自己编的 ES 与 /usr/bin 覆盖档 bind-mount 上去。
+#
+# ★必须在 emustation.service 【之前】完成★ —— ES 一旦起来就来不及换它自己的档案。
+# 放在 /storage/.config/system.d(systemd 的 UnitPath 之一, 可写且持久),
+# 所以整包可由 es4all-profiles 下发, 不必动只读的 /usr。
+#
+# 与 EmuELEC 官方的 custom_start.sh 掛勾相比:
+#   emuelec_autostart.sh 是 `/storage/.config/custom_start.sh before &` —— **背景执行**,
+#   会跟 ES 启动抢时间, 挂载可能来不及。用 systemd 单元 + Before= 才有明确的顺序保证。
+[Unit]
+Description=es4all self-mount (ES binary and /usr/bin overrides)
+Before=emustation.service
+After=sysinit.target
+RequiresMountsFor=/storage
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/storage/.config/es4all/bin/selfmount.sh
+
+[Install]
+WantedBy=emuelec.target
