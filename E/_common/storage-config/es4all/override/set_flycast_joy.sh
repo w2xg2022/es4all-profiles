@@ -199,6 +199,38 @@ set_pad() {
       sed -i "/= ${NUM_SELECT}:btn_escape\$/d" "${CONFIG_TMP_D}"
   fi
 
+  # NOTE(w2xg2022 2026-08-02): ★选单键改抓 ES 的热键(hotkeyenable), 不再只跟 SDL 的 back★
+  #   Flycast 单按热键就开主选单, 所以「哪一颗是选单键」= 「哪一颗是热键」。
+  #   而热键是 **ES 侧的定义**、使用者可以在 ES 里改:
+  #       es_input.cfg: <input name="hotkeyenable" type="button" id="6" />
+  #   原本用的 NUM_SELECT 来自 gamecontrollerdb 的 back —— 在这支手柄上两者
+  #   碰巧都是 6, 但那是巧合。使用者把热键改成别的键(例如 Guide)就不会跟着变。
+  #   ⚠️ 只在「ES 真的记了这支手柄的 hotkeyenable」且与 back 不同时才改写;
+  #      读不到就保持原状(退回 back), 不猜。
+  #
+  #   ★按【装置名】比对, 不能按 GUID★:SDL 2.26+ 在 GUID 里塞了 CRC-16,
+  #   joy_common 拿到的是 030081b85e04...、ES 记的是 030000005e04...,
+  #   同一支手柄两串不一样, 按 GUID 比对必然落空(而且是静默落空)。
+  local ES_INPUT="/storage/.config/emulationstation/es_input.cfg"
+  if [[ -f "${ES_INPUT}" && -n "${JOY_NAME:-}" ]]; then
+      local HK
+      HK=$(awk -v nm="deviceName=\"${JOY_NAME}\"" '
+          index($0, nm) { inblock=1 }
+          inblock && /name="hotkeyenable"/ && /type="button"/ {
+              if (match($0, /id="[0-9]+"/)) {
+                  print substr($0, RSTART+4, RLENGTH-5); exit
+              }
+          }
+          inblock && /<\/inputConfig>/ { inblock=0 }
+      ' "${ES_INPUT}")
+      if [[ -n "${HK}" && "${HK}" != "${NUM_SELECT}" ]]; then
+          # 把选单从 back 移到 ES 指定的热键上
+          sed -i "/= ${NUM_SELECT}:btn_menu\$/d" "${CONFIG_TMP_D}"
+          echo "bind$((B_COUNT_D++)) = ${HK}:btn_menu" >> "${CONFIG_TMP_D}"
+          echo "es4all: menu key follows ES hotkeyenable (button ${HK})"
+      fi
+  fi
+
   echo -e "\n[digital]" >> "${CONFIG}"
   cat "${CONFIG_TMP_D}" | sort >> "${CONFIG}"
 
@@ -213,22 +245,14 @@ set_pad() {
     [[ -n "${NUM_START}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_START}:btn_escape:0" >> "${CONFIG}"
     [[ -n "${NUM_R1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_R1}:btn_quick_save:0" >> "${CONFIG}"
     [[ -n "${NUM_L1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_L1}:btn_jump_state:0" >> "${CONFIG}"
-    # NOTE(w2xg2022 2026-08-02): ★呼出选单那一组改成跟着 ES 的印刷布局走★
-    #   原本写死 NUM_WESTX(位置西), 注解假设「西 = 印着 X」—— 那只在 Xbox 式印刷成立。
-    #   任天堂式手柄上西键印的是 Y, 选单就变成 SELECT+Y, 与 PSP 修好之前是同一个洞。
-    #   位置本身不需要透传(SDL 语意键两边都从 gamecontrollerdb 推导, 本来就对齐);
-    #   唯独「印着 X 的是哪一颗」是**印刷资讯**, 只有 ES 知道 —— 读 es_settings.cfg 的
-    #   InvertButtons(GuiDetectLayout 只按一次 A 写入):
-    #     false = Xbox 式(A 在南) → 印刷 X 在西
-    #     true  = 任天堂式(A 在东) → 印刷 X 在北
-    #   ⚠️ 还没侦测过时该键不存在 → 落回西键, 与改动前同值, 行为不变。
-    #   与 PSP 的 ppsspp.sh 同一套判据, 两边要一起改, 别只改一边。
-    local ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
-    local NUM_MENUKEY="${NUM_WESTX}"
-    if grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null; then
-        [[ -n "${NUM_NORTHY}" ]] && NUM_MENUKEY="${NUM_NORTHY}"
-    fi
-    [[ -n "${NUM_MENUKEY}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_MENUKEY}:btn_menu:0" >> "${CONFIG}"
+    # NOTE(w2xg2022 2026-08-02 第二版): ★呼出选单的组合键【已移除】★
+    #   实机发现:Flycast **单按 SELECT 就会开主选单**(上面 [digital] 里
+    #   [back]="btn_menu" 那条),所以 SELECT+X 这个组合完全多余 ——
+    #   两条都指向 btn_menu, 留着只是多一条会互相干扰的绑定。
+    #   连带地,这里也不再需要 InvertButtons 那套「印刷 X 在哪」的判断:
+    #   选单键是**热键本身**, 不是脸键, 没有印刷歧义。
+    #   (PSP 那边不同 —— PPSSPP 没有「单键开选单」, 必须用 SELECT+X 和弦,
+    #    所以 ppsspp.sh 里的 InvertButtons 判断要留着, 别一起删。)
   fi
 
   echo -e "\n[emulator]" >> "${CONFIG}"

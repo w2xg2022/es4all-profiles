@@ -68,21 +68,58 @@ fi
 #   是因为还没有人乾净退出过(用 SELECT+START 退出是硬杀行程, PPSSPP 没机会写档),
 #   迟早会掉。ROCKNIX 那边已经实机坐实过这个现象。
 #
-# ★为什么只有 SELECT+X 需要「透传」, 其余三组不用★
-#   10-188~191 是 SDL GameController 的语意键(Y/A/B/X), **位置本来就跟 ES 对齐**
-#   (两边都从 gamecontrollerdb 推导), 所以位置资讯不需要传。
-#   唯独「印着 X 的是哪一颗」是**印刷资讯**, 只有 ES 知道 —— ES 的布局侦测
-#   (GuiDetectLayout, 只按一次 A)把结果写进 es_settings.cfg 的 InvertButtons:
-#     false = Xbox 式印刷(A 在南) → 印刷 X 在西 = SDL X = 10-191
-#     true  = 任天堂式印刷(A 在东) → 印刷 X 在北 = SDL Y = 10-188
-#   其余三组(SELECT+START / R1 / L1)与印刷无关, 固定值。
-#   ⚠️ 键还没侦测过时 InvertButtons 不存在 → 落回 Xbox 式, 与现有模板同值, 行为不变。
+# ★两样东西都从 ES 透传:热键本身 + 「印着 X 的是哪一颗」★
+#   ① **热键**(四组和弦共用的修饰键):来自 es_input.cfg 的 hotkeyenable。
+#      使用者在 ES 里改热键, 独立模拟器要跟着改 —— 这是「严格从 ES 透传」的要求,
+#      不能写死 10-196(那只是「多数手柄的热键碰巧是 SELECT」)。
+#   ② **印刷 X 在哪**:10-188~191 是 SDL GameController 的语意键(Y/A/B/X),
+#      **位置本来就跟 ES 对齐**(两边都从 gamecontrollerdb 推导), 位置不必传;
+#      唯独「印着 X 的是哪一颗」是印刷资讯, 只有 ES 知道 —— 布局侦测
+#      (GuiDetectLayout, 只按一次 A)把结果写进 es_settings.cfg 的 InvertButtons:
+#        false = Xbox 式印刷(A 在南) → 印刷 X 在西 = SDL X = 10-191
+#        true  = 任天堂式印刷(A 在东) → 印刷 X 在北 = SDL Y = 10-188
+#   两项都有保底:读不到就落回 SELECT + Xbox 式, 与改动前同值, 行为不变。
+#
+# ⚠️ PSP 与 DC 在这里**不对称, 别互相照抄**:
+#    Flycast **单按热键就开主选单**, 所以那边不需要和弦、也没有印刷歧义(已简化);
+#    PPSSPP 没有单键开选单, 必须用「热键+X」, 所以 ② 这半在这里非留不可。
 ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
 CONTROLS_INI="/storage/.config/ppsspp/PSP/SYSTEM/controls.ini"
 
 if [ -f "${CONTROLS_INI}" ]; then
 	MENU_KEY="10-191"
 	grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null && MENU_KEY="10-188"
+
+	# ★热键(和弦的修饰键)也从 ES 透传, 不再写死 10-196★
+	#   ES 的 es_input.cfg 记的是**实体按键编号**:
+	#       <input name="hotkeyenable" type="button" id="6" />
+	#   PPSSPP 要的是 device-10 的 NKCODE, 中间要查表 —— 这张表与
+	#   set_ppsspp_joy.sh 的 GC_PPSSPP_VALUES 同源(实体索引 -> NKCODE),
+	#   改那边记得两边一起改。
+	#   ⚠️ 四组和弦(退出/存档/读档/选单)的修饰键**必须一起跟着变**,
+	#      只改选单那组会变成「选单用新热键、其余三组还用旧的」。
+	#   ★按【装置名】查 es_input.cfg, 不能按 GUID★:SDL 2.26+ 的 GUID 带 CRC-16,
+	#     ES 记的与执行期取到的不是同一串, 按 GUID 比对必然静默落空。
+	HOTKEY="10-196"                       # 落不到时的保底 = SELECT(与改动前同值)
+	PAD_NAME="$(cat /sys/class/input/js0/device/name 2>/dev/null)"
+	if [ -n "${PAD_NAME}" ] && [ -f "${ES_SETTINGS%es_settings.cfg}es_input.cfg" ]; then
+		HK_ID=$(awk -v nm="deviceName=\"${PAD_NAME}\"" '
+			index($0, nm) { inblock=1 }
+			inblock && /name="hotkeyenable"/ && /type="button"/ {
+				if (match($0, /id="[0-9]+"/)) { print substr($0, RSTART+4, RLENGTH-5); exit }
+			}
+			inblock && /<\/inputConfig>/ { inblock=0 }
+		' "${ES_SETTINGS%es_settings.cfg}es_input.cfg")
+		case "${HK_ID}" in
+			0)  HOTKEY="10-189" ;;  1)  HOTKEY="10-190" ;;
+			2)  HOTKEY="10-191" ;;  3)  HOTKEY="10-188" ;;
+			4)  HOTKEY="10-193" ;;  5)  HOTKEY="10-192" ;;
+			6|8) HOTKEY="10-196" ;; 7|9) HOTKEY="10-197" ;;
+			11) HOTKEY="10-106" ;;  12) HOTKEY="10-107" ;;
+			*)  ;;                  # 认不得(含空值/b10 home 无对应码)就保底
+		esac
+		[ -n "${HK_ID}" ] && echo "PSP HOTKEY from ES: button ${HK_ID} -> ${HOTKEY}"
+	fi
 
 	# 有该行就改、没有就补。键名含空格, sed 的位址要完整比对到 " = "。
 	set_chord() {   # $1=键名  $2=值
@@ -93,25 +130,25 @@ if [ -f "${CONTROLS_INI}" ]; then
 		fi
 	}
 
-	set_chord "Exit App"   "10-196:10-197"   # SELECT+START 退出
-	set_chord "Save State" "10-196:10-192"   # SELECT+R1    存档
-	set_chord "Load State" "10-196:10-193"   # SELECT+L1    读档
+	set_chord "Exit App"   "${HOTKEY}:10-197"   # 热键+START 退出
+	set_chord "Save State" "${HOTKEY}:10-192"   # 热键+R1    存档
+	set_chord "Load State" "${HOTKEY}:10-193"   # 热键+L1    读档
 
 	# ★Pause 只换和弦那一段, 不整行覆盖★: EmuELEC 的模板是
 	#   Pause = 1-111,10-196:10-191
 	# 前面那个 1-111 是键盘键(接 USB 键盘时用得到)。ROCKNIX 那边整行重写没问题
 	# 是因为它的模板本来就只有和弦; 这里照抄会把键盘那半吃掉。
 	if grep -q '^Pause = ' "${CONTROLS_INI}"; then
-		if grep -q '^Pause = .*10-196:' "${CONTROLS_INI}"; then
-			sed -i "/^Pause = /s|10-196:10-[0-9]*|10-196:${MENU_KEY}|" "${CONTROLS_INI}"
+		if grep -qE '^Pause = .*10-[0-9]+:10-[0-9]+' "${CONTROLS_INI}"; then
+			sed -i "/^Pause = /s|10-[0-9]*:10-[0-9]*|${HOTKEY}:${MENU_KEY}|" "${CONTROLS_INI}"
 		else
-			sed -i "/^Pause = /s|\$|,10-196:${MENU_KEY}|" "${CONTROLS_INI}"
+			sed -i "/^Pause = /s|\$|,${HOTKEY}:${MENU_KEY}|" "${CONTROLS_INI}"
 		fi
 	else
-		echo "Pause = 10-196:${MENU_KEY}" >>"${CONTROLS_INI}"
+		echo "Pause = ${HOTKEY}:${MENU_KEY}" >>"${CONTROLS_INI}"
 	fi
 
-	echo "PSP HOTKEYS set: exit/save/load fixed, menu(SELECT+X) = 10-196:${MENU_KEY}"
+	echo "PSP HOTKEYS set: hotkey=${HOTKEY}, menu(hotkey+X) = ${HOTKEY}:${MENU_KEY}"
 fi
 
 ARG=${1//[\\]/}
