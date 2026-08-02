@@ -53,11 +53,22 @@ bind_over "${ES_BIN}" /usr/bin/emulationstation
 # ② /usr/bin 覆盖: override/ 里每个档都盖到 /usr/bin/<同名>
 #    ★只盖【本来就存在】的档★(bind_over 里有守卫) —— 覆盖一个不存在的目标没有意义,
 #    而且那通常表示档名打错了, 静默建立反而会让人以为生效了。
+#
+# ★这个回圈【没东西可挂】时一定要留话★ —— 实机踩过(2026-08-02):
+# 开机时 override/ 还是空的(档案是 ES 起来后由 profile 同步才送下来的),
+# 回圈一个档都没跑, log 就只剩开始/结束两行, 跟成功挂完长得一模一样;
+# 结果 PSP/DC 用的还是固件里那份写死键位表, 而 log 看起来毫无异状。
+# 无声的成功与无声的失败必须长得不一样。
+n=0
 if [ -d "${OVERRIDE_DIR}" ]; then
 	for f in "${OVERRIDE_DIR}"/*; do
 		[ -f "${f}" ] || continue
+		n=$((n + 1))
 		bind_over "${f}" "/usr/bin/$(basename "${f}")"
 	done
+	[ "${n}" -eq 0 ] && log "★注意★ ${OVERRIDE_DIR} 里没有可挂的档(profile 同步可能还没跑)"
+else
+	log "★注意★ ${OVERRIDE_DIR} 不存在, 本轮没有任何 /usr/bin 覆盖"
 fi
 
 log "===== selfmount 结束 ====="

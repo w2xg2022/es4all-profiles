@@ -94,6 +94,14 @@ bind-mount 直接换掉档案本身，不依赖任何顺序。
 `/usr/bin/emulationstation`。手动 mount 不持久 —— 重开机就跑回固件自带的旧版，
 而版本号长得很像，极容易误判成「我的改动没生效」（实机踩过）。
 
+⚠️ **顺序死结（已修，别再拿掉）**：`selfmount` 是 oneshot + `Before=emustation.service`，
+一次开机只在 ES **之前**跑一次；而 override 里的档是 ES 起来**之后**才由 profile 同步送下来的。
+=> 新档在拿到它的那一轮开机永远挂不上，要等下一次重开机，中间那一轮的表现是
+「档案明明下发成功却完全没作用」且 log 无异状。
+所以 `bin/apply.sh` 的 `selfmount_refresh()` 会在同步之后**补跑一次**
+（`bind_over` 对已挂载的目标会跳过，重跑安全）。
+`selfmount.sh` 也会在**没有任何档可挂**时留一行 log —— 无声的成功与无声的失败不该长得一样。
+
 **目前 override 里有什么**
 
 | 档案 | 来源 | 为什么搬进来 |
@@ -103,6 +111,30 @@ bind-mount 直接换掉档案本身，不依赖任何顺序。
 
 ⚠️ 两支**当前与固件树位元组相同**（纯搬家，还没改行为）——这样才验得出 bind-mount
 链路本身是对的。之后的修改都在本仓库进行。
+
+### 键位精灵的触发钩子（controls-changed）
+
+`<T>/_common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh`
+→ 落到 `/storage/.config/emulationstation/scripts/controls-changed/`。
+
+ES 存完键位会发 `controls-changed` 事件，`Scripting::fireEvent` 会把
+`scripts/<事件名>/` 底下的每一支都跑一遍；这支就去调 `inputconfiguration.sh`，
+由它把 `es_input.cfg` 翻译成 RetroArch / PSP / DC 的设定。
+
+★为什么不沿用发行版原本那条路★：原本的触发写在 `es_input.cfg` 里的
+`<inputAction type="onfinish">`。那个档在使用者可写的 `/storage`，会被 ES 自己覆写、
+也常被部署或还原**整份取代** —— 那五行一掉，「精灵 → RA/PSP/DC」整条链就**无声断掉**：
+精灵照跑、`es_input.cfg` 照更新，但没人去产生 `/tmp/joypads/*.cfg`，
+RetroArch 继续用旧键位，且毫无错误讯息。
+（实机踩过 2026-08-02：MD1000/EmuELEC，RA 那份停在几分钟前的旧档，select/start 刚好对调。）
+
+事件这条路的触发条件在**档案摆放位置**，不在任何可被覆写的内容里，所以拿它当正路。
+两条并存无妨：`controls-changed` 不在 `_asyncEvents` 里，是**同步**执行完才轮到
+`doOnFinish`，不会两支同时写 `/tmp/joypads`；重复跑一次结果也一样。
+
+⚠️ 这支需要**执行位**（ES 是直接执行档案本身），但补执行位只发生在 `bin/` 落点，
+所以由 `bin/apply.sh` 的 `input_hook()` 补。钩子本身不能改放 `bin/` ——
+ES 的事件机制只认 `scripts/<事件名>/` 这个位置。
 
 ### 机制与资料之间的契约
 

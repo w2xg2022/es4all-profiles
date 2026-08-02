@@ -26,6 +26,8 @@ set -u
 
 STAMP_DIR=/storage/.config/es4all
 DATA_DIR=/storage/.config/es4all          # 机型资料(<T>/<机型>/storage-config/es4all/) 的落点
+OVERRIDE_DIR=/storage/.config/es4all/override   # /usr/bin 覆盖档(由 selfmount.sh bind-mount)
+ES_CONFIG_DIR=/storage/.config/emulationstation # ES 的使用者设定目录(scripts/ 钩子在这底下)
 PPINI=/storage/.config/ppsspp/PSP/SYSTEM/ppsspp.ini
 
 mkdir -p "${STAMP_DIR}"
@@ -112,6 +114,53 @@ selfmount_service() {
 }
 
 # ---------------------------------------------------------------------------
+# 开机自挂载服务: 同步之后【补跑一次】
+# ---------------------------------------------------------------------------
+# ★这是一个顺序死结, 不补跑就永远慢一拍★(实机踩过 2026-08-02):
+#   selfmount 是 oneshot + Before=emustation.service, 一次开机只在 ES 【之前】跑一次;
+#   而 override/ 里的档是 ES 起来【之后】才由 profile 同步送下来的。
+#   => 新的 override 档在拿到它的那一轮开机永远挂不上, 要等下一次重开机。
+#   中间那一轮的表现是「档案明明下发成功, 却完全没作用」, 而且 log 无异状。
+#
+# 补跑安全: bind_over 对已经是挂载点的目标会跳过, 所以重跑只会补上还没挂的那些,
+# 不会去动执行中的 ES 本体(它开机时就挂好了)。
+selfmount_refresh() {
+	[ -d "${OVERRIDE_DIR}" ] || return 0
+	command -v systemctl >/dev/null 2>&1 || return 0
+	command -v mountpoint >/dev/null 2>&1 || return 0
+
+	local f target need=0
+	for f in "${OVERRIDE_DIR}"/*; do
+		[ -f "${f}" ] || continue
+		target="/usr/bin/$(basename "${f}")"
+		# 只看【本来就存在】的目标 —— 与 selfmount.sh 的守卫同一条规则,
+		# 否则一个打错字的档名会让这里每次开机都白白重启服务。
+		[ -e "${target}" ] || continue
+		mountpoint -q "${target}" || need=1
+	done
+
+	[ "${need}" -eq 1 ] && systemctl restart es4all-selfmount.service >/dev/null 2>&1
+	return 0
+}
+
+# ---------------------------------------------------------------------------
+# 键位透传的触发钩子: 补执行位
+# ---------------------------------------------------------------------------
+# ES 存完键位后会 fireEvent("controls-changed"), Scripting 会去跑
+# scripts/controls-changed/ 里的每一支 —— 但它是【直接执行档案本身】, 没有执行位就跑不起来。
+# 而 profile 同步只对落在 bin/ 的档补执行位(见 Es4allProfiles.cpp 的 needsExecBit),
+# 这支钩子落在 storage-config/ 底下, 送到就是 -rw-, 不补就是「下发成功但完全没效果」。
+#
+# ★为什么钩子不干脆放 bin/★: 那个落点是 /storage/.config/es4all/bin, ES 的事件机制
+# 只认 scripts/<事件名>/ 这个位置, 放别处它根本不会去看。
+input_hook() {
+	local dir="${ES_CONFIG_DIR}/scripts/controls-changed"
+	[ -d "${dir}" ] || return 0
+	chmod 0755 "${dir}"/*.sh 2>/dev/null
+	return 0
+}
+
+# ---------------------------------------------------------------------------
 # DC 预设: 用独立模拟器(Flycast-SA)而不是 libretro 核心
 # ---------------------------------------------------------------------------
 # 与 PSP 同一套做法: dreamcast.core / dreamcast.emulator 两个键都要设 ——
@@ -135,5 +184,7 @@ dc_defaults() {
 psp_defaults
 dc_defaults
 selfmount_service
+selfmount_refresh
+input_hook
 
 exit 0
