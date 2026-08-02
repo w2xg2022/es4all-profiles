@@ -200,6 +200,61 @@ if [ -f "${CONTROLS_INI}" ]; then
 			sed -i "/^Select = /s/10-19[67]/10-197/" "${CONTROLS_INI}"
 			sed -i "/^Start = /s/10-19[67]/10-196/"  "${CONTROLS_INI}"
 		fi
+
+		# -------------------------------------------------------------------
+		# ★面键按【位置】重排:✕南 ○东 □西 △北★
+		# -------------------------------------------------------------------
+		# ★真因(实机第二支手柄 GUID ...72050000 坐实)★
+		#   SDL 的 a/b/x/y **按定义是位置**(a=南 b=东 x=西 y=北), 我们一直靠这点
+		#   直接把 10-189/190/191/188 当成位置用 —— 但那要 gamecontrollerdb 的
+		#   条目**真的按位置写**才成立。这支山寨手柄的条目是**按字母写的**:
+		#       db: a:b1  b:b0  x:b3  y:b2
+		#       ES: a=1(印刷A)  b=0  x=3  y=2   且 InvertButtons=true(A 在东)
+		#   → db 的 "a" 指到的是【印着 A 的那颗】, 而它在**东**, 不在南。
+		#   于是 Cross(✕)=10-189=db 的 a 就跑到东边去, ○✕ 与 □△ 全部位置颠倒。
+		#   出厂模板一个字没改 —— 不是被改坏, 是模板的位置假设对这支手柄不成立。
+		#
+		# ★怎么拿到「真实位置」: 只有 ES 知道★
+		#   ES 有两样 db 没有的东西:①印刷字母 -> 实体编号(键位精灵)
+		#   ②印刷佈局(GuiDetectLayout 的 InvertButtons)。两者一组合就能反推位置:
+		#       InvertButtons=false(Xbox 式, A 在南): 南=a 东=b 西=x 北=y
+		#       InvertButtons=true (任天堂式, A 在东): 南=b 东=a 西=y 北=x
+		#   再把「位置对应的实体编号」经 db 转回 SDL 语意名 -> NKCODE, 就是要写的值。
+		#
+		# ⚠️ 四颗**全部**拿得到、且四个 NKCODE 互不相同才动手; 少一个就整组不改,
+		#    宁可维持模板原样也不要产出半套(半套比全错更难查)。
+		nkcode_of_phys() {
+			case "$(gc_semantic_of "${1}")" in
+				a) echo "10-189" ;;  b) echo "10-190" ;;
+				x) echo "10-191" ;;  y) echo "10-188" ;;
+			esac
+		}
+		if grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null; then
+			NK_SOUTH=$(nkcode_of_phys "$(es_input_btn b)")
+			NK_EAST=$(nkcode_of_phys  "$(es_input_btn a)")
+			NK_WEST=$(nkcode_of_phys  "$(es_input_btn y)")
+			NK_NORTH=$(nkcode_of_phys "$(es_input_btn x)")
+		else
+			NK_SOUTH=$(nkcode_of_phys "$(es_input_btn a)")
+			NK_EAST=$(nkcode_of_phys  "$(es_input_btn b)")
+			NK_WEST=$(nkcode_of_phys  "$(es_input_btn x)")
+			NK_NORTH=$(nkcode_of_phys "$(es_input_btn y)")
+		fi
+		if [ -n "${NK_SOUTH}" ] && [ -n "${NK_EAST}" ] && [ -n "${NK_WEST}" ] && [ -n "${NK_NORTH}" ] &&
+		   [ "$(printf '%s\n' "${NK_SOUTH}" "${NK_EAST}" "${NK_WEST}" "${NK_NORTH}" | sort -u | wc -l)" = "4" ]; then
+			# 只换那一段 10-xxx, 保留前面的键盘绑定(如 Cross 那行的 1-52)。
+			sed -i "/^Cross = /s/10-[0-9]*/${NK_SOUTH}/"    "${CONTROLS_INI}"
+			sed -i "/^Circle = /s/10-[0-9]*/${NK_EAST}/"    "${CONTROLS_INI}"
+			sed -i "/^Square = /s/10-[0-9]*/${NK_WEST}/"    "${CONTROLS_INI}"
+			sed -i "/^Triangle = /s/10-[0-9]*/${NK_NORTH}/" "${CONTROLS_INI}"
+			# ★选单和弦的第二颗也必须用这里算出来的「西」★
+			#   否则会退回写死的 10-191(= db 的 x), 在这种手柄上落到北,
+			#   而 RA 的 input_menu_toggle_btn 是按实体编号给的西 —— 两边又会不一致。
+			MENU_KEY="${NK_WEST}"
+			echo "PSP face buttons by position: X(south)=${NK_SOUTH} O(east)=${NK_EAST} [](west)=${NK_WEST} /\\(north)=${NK_NORTH}"
+		else
+			echo "PSP face buttons: 位置资讯不完整, 维持模板原样(未重排)"
+		fi
 	fi
 
 	# 有该行就改、没有就补。键名含空格, sed 的位址要完整比对到 " = "。
