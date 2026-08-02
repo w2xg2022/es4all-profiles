@@ -247,10 +247,17 @@ if [ -f "${CONTROLS_INI}" ]; then
 			sed -i "/^Circle = /s/10-[0-9]*/${NK_EAST}/"    "${CONTROLS_INI}"
 			sed -i "/^Square = /s/10-[0-9]*/${NK_WEST}/"    "${CONTROLS_INI}"
 			sed -i "/^Triangle = /s/10-[0-9]*/${NK_NORTH}/" "${CONTROLS_INI}"
-			# ★选单和弦的第二颗也必须用这里算出来的「西」★
-			#   否则会退回写死的 10-191(= db 的 x), 在这种手柄上落到北,
-			#   而 RA 的 input_menu_toggle_btn 是按实体编号给的西 —— 两边又会不一致。
-			MENU_KEY="${NK_WEST}"
+			# ★选单和弦的第二颗【不要】跟着换成「真实的西」—— 曾这么改, 是错的★
+			#   一度把 MENU_KEY 设成 NK_WEST, 想让选单键「按位置」。实机对照组打脸:
+			#       RA  input_menu_toggle_btn = 3
+			#       DC  bind = 热键,3:btn_menu
+			#       PSP 改成 NK_WEST 后 = 实体 2   ← 唯一不一致的变成 PSP
+			#   原因: RA 与 flycast 的选单键都取自 **db 的 "x"**(RA 自己的 autoconfig、
+			#   flycast 走 GC_ARRAY), 而 PSP 的 10-191 也正是 SDL 的 x —— 三边同源。
+			#   db 是按位置写还是按字母写都无所谓, **三边会一起偏**, 永远指同一颗实体键。
+			#   反而是「自己算真实位置」会让 PSP 单独走开。
+			#   → 选单键保持 10-191(见上方 MENU_KEY 定义), 一致性优先于绝对位置。
+			#   (面键不同: 它决定游戏内手感, 必须是真实位置, 没有「三边一致」可言。)
 			echo "PSP face buttons by position: X(south)=${NK_SOUTH} O(east)=${NK_EAST} [](west)=${NK_WEST} /\\(north)=${NK_NORTH}"
 		else
 			echo "PSP face buttons: 位置资讯不完整, 维持模板原样(未重排)"

@@ -1,13 +1,13 @@
 {
   "schema": 1,
-  "version": "2026.08.02.13",
+  "version": "2026.08.02.14",
   "min_es4all_version": "1.1",
   "files": [
     { "path": "E/_common/bin/apply.sh", "md5": "a9705f751f0242d4950baefd3ee0ceb8", "size": 7559 },
     { "path": "E/_common/bin/installtoemmc.sh", "md5": "0a2346de12a0a128bf5e9cdfd5b38f37", "size": 11116 },
     { "path": "E/_common/bin/selfmount.sh", "md5": "320e1f57cdb6a93d9adb7267795c94e3", "size": 2636 },
     { "path": "E/_common/bin/setaudio.sh", "md5": "3d777d942746c8d4a87d6fe9cbe05c13", "size": 3860 },
-    { "path": "E/_common/storage-config/es4all/override/ppsspp.sh", "md5": "6e435504f495856ec11353c2a2863d54", "size": 16752 },
+    { "path": "E/_common/storage-config/es4all/override/ppsspp.sh", "md5": "a7a59b01b508f59eed14edd5d9529ea4", "size": 17408 },
     { "path": "E/_common/storage-config/es4all/override/set_flycast_joy.sh", "md5": "03346fbc11385f89bc52310f4a253d17", "size": 19987 },
     { "path": "E/_common/storage-config/es4all/override/set_ppsspp_joy.sh", "md5": "eee9d12143d8e88ec57dfd3be2cfe657", "size": 7070 },
     { "path": "E/_common/storage-config/system.d/es4all-selfmount.service", "md5": "7540ea1767cc77b2c6da971220a68965", "size": 895 },
