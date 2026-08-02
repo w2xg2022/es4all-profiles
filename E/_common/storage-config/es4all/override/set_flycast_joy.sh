@@ -41,7 +41,9 @@ declare -A FLYCAST_D_BUTTONS=(
   [back]="btn_menu"
   [start]="btn_start"
   [guide]="btn_escape"
-  [rightstick]="btn_fforward"
+  # NOTE(w2xg2022 2026-08-02): 移除 [rightstick]="btn_fforward" —— 用户明确表示快进不需要。
+  #   顺带记一笔两边本来还不一致:EmuELEC 这里绑的是 **R3(右摇杆按下)**,
+  #   ROCKNIX 的 flycast.gptk 绑的是 **R2**(r2_hk = f)。现在两边一起拿掉。
   [dpup]="btn_dpad1_up"
   [dpdown]="btn_dpad1_down"
   [dpleft]="btn_dpad1_left"
@@ -136,7 +138,7 @@ set_pad() {
   # NOTE(w2xg2022): 捕捉SELECT/START/肩键L1R1/西键(X)各自的实体按键码，
   # 供下面统一生成[combo]组合键区块使用(flycast v4原生支持真正的按键组合，
   # 不需要gptokeyb外挂)。
-  local NUM_SELECT="" NUM_START="" NUM_L1="" NUM_R1="" NUM_WESTX=""
+  local NUM_SELECT="" NUM_START="" NUM_L1="" NUM_R1="" NUM_WESTX="" NUM_NORTHY=""
 
   for REC in "${GC_ARRAY[@]}"; do
       local KEY=$(echo ${REC} | cut -d ":" -f 1)
@@ -176,12 +178,26 @@ set_pad() {
               leftshoulder)  NUM_L1="${NUM}" ;;
               rightshoulder) NUM_R1="${NUM}" ;;
               x)             NUM_WESTX="${NUM}" ;;
+              # NOTE(w2xg2022 2026-08-02): 北键也要记 —— 任天堂式印刷时「印着 X 的那颗」
+              #   在北(SDL 的 y),见下方组合键那段。
+              y)             NUM_NORTHY="${NUM}" ;;
           esac
       fi
   done
 
   echo "[analog]" > "${CONFIG}"
   cat "${CONFIG_TMP_A}" | sort >> "${CONFIG}"
+
+  # NOTE(w2xg2022 2026-08-02): ★修 SELECT 单键同时绑到 menu 与 escape★
+  #   对照表里 [back]=btn_menu、[guide]=btn_escape。但**很多山寨 Xbox 手柄没有 Guide 键**,
+  #   gamecontrollerdb 里 back 与 guide 会解析到同一个按键号 —— 实机(Microsoft X-Box 360 pad)
+  #   产出就是 `bind2 = 6:btn_menu` 与 `bind7 = 6:btn_escape` 并存, SELECT 单按会同时
+  #   触发呼出选单与退出, 行为未定义。
+  #   处置: 撞号时**丢掉 escape 那条单键**, 保留 menu(呼出选单是主要用途);
+  #   退出仍然可用, 走下面的 SELECT+START 组合键。
+  if [[ -n "${NUM_SELECT}" ]]; then
+      sed -i "/= ${NUM_SELECT}:btn_escape\$/d" "${CONFIG_TMP_D}"
+  fi
 
   echo -e "\n[digital]" >> "${CONFIG}"
   cat "${CONFIG_TMP_D}" | sort >> "${CONFIG}"
@@ -197,7 +213,22 @@ set_pad() {
     [[ -n "${NUM_START}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_START}:btn_escape:0" >> "${CONFIG}"
     [[ -n "${NUM_R1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_R1}:btn_quick_save:0" >> "${CONFIG}"
     [[ -n "${NUM_L1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_L1}:btn_jump_state:0" >> "${CONFIG}"
-    [[ -n "${NUM_WESTX}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_WESTX}:btn_menu:0" >> "${CONFIG}"
+    # NOTE(w2xg2022 2026-08-02): ★呼出选单那一组改成跟着 ES 的印刷布局走★
+    #   原本写死 NUM_WESTX(位置西), 注解假设「西 = 印着 X」—— 那只在 Xbox 式印刷成立。
+    #   任天堂式手柄上西键印的是 Y, 选单就变成 SELECT+Y, 与 PSP 修好之前是同一个洞。
+    #   位置本身不需要透传(SDL 语意键两边都从 gamecontrollerdb 推导, 本来就对齐);
+    #   唯独「印着 X 的是哪一颗」是**印刷资讯**, 只有 ES 知道 —— 读 es_settings.cfg 的
+    #   InvertButtons(GuiDetectLayout 只按一次 A 写入):
+    #     false = Xbox 式(A 在南) → 印刷 X 在西
+    #     true  = 任天堂式(A 在东) → 印刷 X 在北
+    #   ⚠️ 还没侦测过时该键不存在 → 落回西键, 与改动前同值, 行为不变。
+    #   与 PSP 的 ppsspp.sh 同一套判据, 两边要一起改, 别只改一边。
+    local ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
+    local NUM_MENUKEY="${NUM_WESTX}"
+    if grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null; then
+        [[ -n "${NUM_NORTHY}" ]] && NUM_MENUKEY="${NUM_NORTHY}"
+    fi
+    [[ -n "${NUM_MENUKEY}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_MENUKEY}:btn_menu:0" >> "${CONFIG}"
   fi
 
   echo -e "\n[emulator]" >> "${CONFIG}"

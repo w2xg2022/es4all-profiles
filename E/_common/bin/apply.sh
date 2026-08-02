@@ -12,6 +12,18 @@
 
 set -u
 
+# ★必须 source /etc/profile★ —— set_ee_setting / get_ee_setting 是**定义在那里面的
+# shell 函式**, 不是 /usr/bin 里的可执行档。少了这行, 下面 `command -v set_ee_setting`
+# 一律不成立, 所有靠它写的设定会被**静默跳过**:选单看起来正常、标记档也照样建立,
+# 但设定一个都没写进 emuelec.conf。实机踩过(2026-08-02):PSP/DC 的模拟器预设
+# 从头到尾没生效, 先前看到的 psp.core=PPSSPPSDL 是韧体本来就有的值, 不是这里设的。
+# 这类「守卫把自己挡掉」的失败最难发现, 因为它不报错也不留痕迹。
+# ⚠️ source 前后要关掉 `set -u`:EmuELEC 的 /etc/profile.d/10-locale.conf 会引用未定义的
+#    LOCPATH, 在 `set -u` 下直接让整支脚本中止(实机踩过, 表现同样是「什么都没发生」)。
+set +u
+[ -f /etc/profile ] && . /etc/profile
+set -u
+
 STAMP_DIR=/storage/.config/es4all
 DATA_DIR=/storage/.config/es4all          # 机型资料(<T>/<机型>/storage-config/es4all/) 的落点
 PPINI=/storage/.config/ppsspp/PSP/SYSTEM/ppsspp.ini
@@ -86,7 +98,27 @@ selfmount_service() {
 	fi
 }
 
+# ---------------------------------------------------------------------------
+# DC 预设: 用独立模拟器(Flycast-SA)而不是 libretro 核心
+# ---------------------------------------------------------------------------
+# 与 PSP 同一套做法: dreamcast.core / dreamcast.emulator 两个键都要设 ——
+# ES 的选单与实际启动路径分别读它们, 只设一个会出现「选单显示 A、实际跑 B」。
+# 值取自 es_systems.cfg 的 <emulator name="flycastsa"><core default="true">flycastsa。
+# ★同样只在第一次套用★(标记档把关): 使用者后来自己改回 libretro 不该被开机流程覆盖。
+dc_defaults() {
+	local stamp="${STAMP_DIR}/.dc-defaults-applied"
+	[ -f "${stamp}" ] && return 0
+
+	if command -v set_ee_setting >/dev/null 2>&1; then
+		set_ee_setting dreamcast.core flycastsa
+		set_ee_setting dreamcast.emulator flycastsa
+	fi
+
+	touch "${stamp}"
+}
+
 psp_defaults
+dc_defaults
 selfmount_service
 
 exit 0

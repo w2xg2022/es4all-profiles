@@ -1,14 +1,14 @@
 {
   "schema": 1,
-  "version": "2026.08.02.1",
+  "version": "2026.08.02.3",
   "min_es4all_version": "1.1",
   "files": [
-    { "path": "E/_common/bin/apply.sh", "md5": "fcd47f1204813b7ca47bb1e5a4adb5cc", "size": 4444 },
+    { "path": "E/_common/bin/apply.sh", "md5": "22b21c0ad3da33864978c88d79575ba8", "size": 6255 },
     { "path": "E/_common/bin/installtoemmc.sh", "md5": "0a2346de12a0a128bf5e9cdfd5b38f37", "size": 11116 },
     { "path": "E/_common/bin/selfmount.sh", "md5": "320e1f57cdb6a93d9adb7267795c94e3", "size": 2636 },
     { "path": "E/_common/bin/setaudio.sh", "md5": "3d777d942746c8d4a87d6fe9cbe05c13", "size": 3860 },
     { "path": "E/_common/storage-config/es4all/override/ppsspp.sh", "md5": "08ebcfc7800e08a856d8f7fa27c062d8", "size": 5597 },
-    { "path": "E/_common/storage-config/es4all/override/set_flycast_joy.sh", "md5": "880ad79a852982714136995489ccf6c0", "size": 8669 },
+    { "path": "E/_common/storage-config/es4all/override/set_flycast_joy.sh", "md5": "eb1dfcca234e1471c397db2665889a61", "size": 11076 },
     { "path": "E/_common/storage-config/es4all/override/set_ppsspp_joy.sh", "md5": "eee9d12143d8e88ec57dfd3be2cfe657", "size": 7070 },
     { "path": "E/_common/storage-config/system.d/es4all-selfmount.service", "md5": "7540ea1767cc77b2c6da971220a68965", "size": 895 },
     { "path": "E/E900V22C/es-resources/audio_outputs.cfg", "md5": "579465ebedf2d251c9db514133e2c2be", "size": 1107 },
@@ -16,6 +16,9 @@
     { "path": "E/MD1000/storage-config/es4all/emmc-layout.conf", "md5": "0782ab3633f3ed30a2b7a0c825689ebb", "size": 1063 },
     { "path": "E/MD1000/storage-config/es4all/psp-defaults.conf", "md5": "ab9d683b05ebfed65fa31c1940905435", "size": 718 },
     { "path": "E/X98mini/es-resources/audio_outputs.cfg", "md5": "3351e1e114de04c8a5eca7460d479b28", "size": 1167 },
+    { "path": "R/_common/bin/selfmount.sh", "md5": "320e1f57cdb6a93d9adb7267795c94e3", "size": 2636 },
+    { "path": "R/_common/storage-config/es4all/override/start_ppsspp.sh", "md5": "a096567f1584a82c01d2ec937278974f", "size": 6993 },
+    { "path": "R/_common/storage-config/flycast/flycast.gptk", "md5": "86b89bae7b6b545952002f94c41222af", "size": 412 },
     { "path": "R/MD1000/es-resources/audio_outputs.cfg", "md5": "49d8ac6d0eced8240ade309b4eec0761", "size": 1281 }
   ]
 }
