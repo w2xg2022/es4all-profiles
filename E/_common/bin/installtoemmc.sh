@@ -71,18 +71,29 @@ if [ -z "${BOARD}" ]; then
 	exit 1
 fi
 
-# 发行版的安装器。两家的档名与一键参数不同:
-#   EmuELEC : /usr/bin/installtoemmc.sh <board>        互动式, 用管线喂 YES
-#   ROCKNIX : /usr/bin/installtoemmc    <board> --yes  原生支援一键
-# (本档在 E/_common, 只会下发给 EmuELEC; ROCKNIX 那份日后放 R/_common。)
-if [ -x /usr/bin/installtoemmc.sh ]; then
-	INSTALLER=/usr/bin/installtoemmc.sh
+# 真正干活的引擎(分区/格式化/复制/改开机设定)。
+#
+# ★引擎【就在本仓库里】, 不再是固件的 /usr/bin/installtoemmc.sh★
+#   —— 执行「installtoemmc 随 profiles 发行、不随机型全固件发行」那条决策:
+#   改一行分区逻辑却要跑数小时云编译 + 使用者重刷机, 成本完全不成比例;
+#   走 profiles 则是「push -> 设备下次开机自己拉」。
+#   固件侧 packages/sx05re/emuelec/bin/installtoemmc.sh 已删除,
+#   ★不要为了「保底」再放回去★: 两份会各自演化, 分岔了没人发现,
+#   直到有人的盒子变砖。
+#
+# 为什么仍然分成两个档而不合并: 本档做的是「怎么让使用者看得见、按不到 YES 也能跑」,
+# 引擎做的是「怎么动这颗碟」, 两者的坑与改动节奏都不一样, 合起来是一支七百行的脚本。
+ENGINE="$(dirname "$0")/installtoemmc-engine.sh"
+if [ -x "${ENGINE}" ]; then
+	INSTALLER="${ENGINE}"
 	ONECLICK=pipe
 elif [ -x /usr/bin/installtoemmc ]; then
+	# ROCKNIX 的原生安装器(档名不同、支援 --yes 一键)。
+	# 本档在 E/_common 只会下发给 EmuELEC, 这条是保留给日后 R/_common 那份的形状。
 	INSTALLER=/usr/bin/installtoemmc
 	ONECLICK=flag
 else
-	log "拒绝执行: 找不到发行版的 eMMC 安装器。"
+	log "拒绝执行: 找不到 eMMC 安装引擎 (${ENGINE})。"
 	exit 1
 fi
 
