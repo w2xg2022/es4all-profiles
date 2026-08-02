@@ -698,6 +698,30 @@ if [[ -n "${EE_GAMEBTN_CORENAME_VAL}" ]]; then
                -e '/^input_player1_btn_x = "1"$/d' \
                -e '/^input_player1_btn_y = "9"$/d' "${EE_RMP_FILE}"
     fi
+    # ★唯一的例外: Apple II(AppleWin) 刻意把 A/B 对调回去★
+    #
+    # 三层架构的通则是「游戏内按位置」, 但 apple2 是**习惯特例**(架构定案时就保留的):
+    # 使用者按的是长年养成的手感, 不是几何位置, 所以这台机器上 A/B 要维持印刷对齐。
+    # ★做成【一个核心的具名例外】, 而不是把全域翻转改回来★ —— 全域翻转正是刚修掉的
+    # 「翻转语意 + 只翻一半」那个坑, 例外要小、要指名道姓、要写清楚为什么。
+    #
+    # 值就是上面刚清掉的那两行(RetroPad A=8/B=0 -> a=0,b=8), 顺序上先清后写:
+    # 于是就算 RetroArch 把注释标记洗掉了, 下次启动也只会剩一份, 不会越叠越多。
+    #
+    # ★资料夹名必须是 library_name 不是 .info 的 corename★:
+    # applewin 的 .info 写小写 applewin, RA 运行时的 library_name 是大写 AppleWin,
+    # 写错资料夹 RA 就读不到, 表现是「明明设了却没作用」——
+    # 上面的 case 已经把它修正成 AppleWin, 这里直接比对修正后的值。
+    if [[ "${EE_GAMEBTN_CORENAME_VAL}" == "AppleWin" ]]; then
+        mkdir -p "${EE_RMP_DIR}"
+        {
+            echo "# BEGIN InvertGameButtons"
+            echo 'input_player1_btn_a = "0"'
+            echo 'input_player1_btn_b = "8"'
+            echo "# END InvertGameButtons"
+        } >> "${EE_RMP_FILE}"
+    fi
+
     # 移除標記後若檔案變成全空(該core原本沒有其他remap內容)，直接刪掉整個檔案/
     # 資料夾，避免RA讀到一個空remap檔案殘留在磁碟上
     if [[ -f "${EE_RMP_FILE}" ]] && ! grep -q '[^[:space:]]' "${EE_RMP_FILE}"; then
