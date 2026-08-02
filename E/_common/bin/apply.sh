@@ -157,10 +157,14 @@ selfmount_refresh() {
 #
 # ★为什么钩子不干脆放 bin/★: 那个落点是 /storage/.config/es4all/bin, ES 的事件机制
 # 只认 scripts/<事件名>/ 这个位置, 放别处它根本不会去看。
+# configscripts/ 里的档同理: inputconfiguration.sh 会去执行它们, 没有执行位一样跑不起来。
 input_hook() {
-	local dir="${ES_CONFIG_DIR}/scripts/controls-changed"
-	[ -d "${dir}" ] || return 0
-	chmod 0755 "${dir}"/*.sh 2>/dev/null
+	local dir
+	for dir in "${ES_CONFIG_DIR}/scripts/controls-changed" \
+	           "${ES_CONFIG_DIR}/scripts/configscripts"; do
+		[ -d "${dir}" ] || continue
+		chmod 0755 "${dir}"/*.sh 2>/dev/null
+	done
 	return 0
 }
 
