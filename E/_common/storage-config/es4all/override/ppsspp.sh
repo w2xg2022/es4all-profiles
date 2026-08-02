@@ -96,12 +96,22 @@ if [ -f "${CONTROLS_INI}" ]; then
 
 	# ★热键(和弦的修饰键)也从 ES 透传, 不再写死 10-196★
 	#   ES 的 es_input.cfg 记的是**实体按键编号**:
-	#       <input name="hotkeyenable" type="button" id="6" />
-	#   PPSSPP 要的是 device-10 的 NKCODE, 中间要查表 —— 这张表与
-	#   set_ppsspp_joy.sh 的 GC_PPSSPP_VALUES 同源(实体索引 -> NKCODE),
-	#   改那边记得两边一起改。
+	#       <input name="hotkeyenable" type="button" id="7" />
+	#   PPSSPP 要的是 device-10 的 NKCODE, 中间要转换。
 	#   ⚠️ 四组和弦(退出/存档/读档/选单)的修饰键**必须一起跟着变**,
 	#      只改选单那组会变成「选单用新热键、其余三组还用旧的」。
+	#
+	#   ★2026-08-02 修正②:实体编号 -> NKCODE 不能用【写死的对照表】,
+	#     必须经过 gamecontrollerdb 转成 SDL 语意名再查★
+	#     旧写法直接 `6|8) 10-196 ;; 7|9) 10-197`, 隐含假设「实体 6=SELECT、7=START」
+	#     的 X360 惯例。实机第二支手柄(GUID ...72050000)**正好相反**:
+	#         gamecontrollerdb: back:b7  start:b6
+	#     使用者把热键设在实体 7(他的 SELECT), 旧表却给出 10-197(START) ->
+	#     产出 `Exit App = 10-197:10-197` —— **修饰键与第二颗同码**, 和弦按不出来,
+	#     四组全废。(RA / DC 不受影响: 它们的组合键直接写实体编号, 不经过语意层。)
+	#
+	#     正确链路: ES 给实体编号 -> gamecontrollerdb 查它在 SDL 眼中叫什么
+	#               -> 语意名对应 NKCODE。这样任何按键排列的手柄都对。
 	#   ★2026-08-02 修正:改按【GUID(剥掉 CRC)】查, 不能按装置名★
 	#     旧写法用 /sys/class/input/js0/device/name(= UDEV 名 "Microsoft X-Box 360 pad"),
 	#     但 ES 写进 es_input.cfg 的 deviceName 是 **gamecontrollerdb 映射名**
@@ -133,15 +143,31 @@ if [ -f "${CONTROLS_INI}" ]; then
 		' "${ES_INPUT_FILE}"
 	}
 
+	GCDB_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/storage/.config/SDL-GameControllerDB/gamecontrollerdb.txt}"
+	GC_LINE=$(grep -m1 -E "^(${PAD_GUID}|${PAD_GUID_NOCRC})," "${GCDB_FILE}" 2>/dev/null)
+
+	# 实体按键编号 -> SDL 语意名(a/b/x/y/back/start/...)。查的是 gamecontrollerdb
+	# 里 `名称:bN` 那些栏位, 找出 N 等于给定编号的那一笔。查不到回传空值。
+	gc_semantic_of() {
+		echo "${GC_LINE}" | tr ',' '\n' | awk -F: -v n="b${1}" '$2 == n { print $1; exit }'
+	}
+
 	if [ -n "${PAD_GUID}" ] && [ -f "${ES_INPUT_FILE}" ]; then
 		HK_ID=$(es_input_btn hotkeyenable)
-		case "${HK_ID}" in
-			0)  HOTKEY="10-189" ;;  1)  HOTKEY="10-190" ;;
-			2)  HOTKEY="10-191" ;;  3)  HOTKEY="10-188" ;;
-			4)  HOTKEY="10-193" ;;  5)  HOTKEY="10-192" ;;
-			6|8) HOTKEY="10-196" ;; 7|9) HOTKEY="10-197" ;;
-			11) HOTKEY="10-106" ;;  12) HOTKEY="10-107" ;;
-			*)  ;;                  # 认不得(含空值/b10 home 无对应码)就保底
+		# 语意名 -> device-10 的 NKCODE。位置语意固定(a=南 b=东 x=西 y=北),
+		# 与 PSP 的 ✕○□△ 位置对齐一致, 故这张表与手柄的实体排列无关, 永远成立。
+		case "$(gc_semantic_of "${HK_ID}")" in
+			a)             HOTKEY="10-189" ;;   # 南 ✕
+			b)             HOTKEY="10-190" ;;   # 东 ○
+			x)             HOTKEY="10-191" ;;   # 西 □
+			y)             HOTKEY="10-188" ;;   # 北 △
+			back)          HOTKEY="10-196" ;;   # SELECT
+			start)         HOTKEY="10-197" ;;   # START
+			leftshoulder)  HOTKEY="10-193" ;;   # L1
+			rightshoulder) HOTKEY="10-192" ;;   # R1
+			leftstick)     HOTKEY="10-106" ;;   # L3
+			rightstick)    HOTKEY="10-107" ;;   # R3
+			*)             ;;                   # 认不得(含空值 / guide 无对应码)就保底
 		esac
 		if [ -n "${HK_ID}" ]; then
 			echo "PSP HOTKEY from ES: button ${HK_ID} -> ${HOTKEY}"
@@ -160,10 +186,11 @@ if [ -f "${CONTROLS_INI}" ]; then
 		#   → 故做法是**侦测使用者的选择是否与 gamecontrollerdb 相反**,
 		#     相反就把 controls.ini 里 Select / Start 两行的语意码对调, 结果等价。
 		#   两边都读得到才比对; 任一读不到就什么都不做(维持原样), 不猜。
+		#   ⚠️ 与上面的热键转换是两件事, 别混:上面处理「热键那颗的语意是什么」,
+		#      这里处理「使用者对 SELECT/START 的指定与 db 是否相反」。db 本身就
+		#      照使用者的想法排(如本机 back:b7/start:b6)时, 这段不会触发, 是正常的。
 		ES_SELECT_ID=$(es_input_btn select)
 		ES_START_ID=$(es_input_btn start)
-		GCDB_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/storage/.config/SDL-GameControllerDB/gamecontrollerdb.txt}"
-		GC_LINE=$(grep -m1 -E "^(${PAD_GUID}|${PAD_GUID_NOCRC})," "${GCDB_FILE}" 2>/dev/null)
 		GC_BACK_ID=$(echo "${GC_LINE}"  | grep -oE 'back:b[0-9]+'  | grep -oE '[0-9]+$')
 		GC_START_ID=$(echo "${GC_LINE}" | grep -oE 'start:b[0-9]+' | grep -oE '[0-9]+$')
 		if [ -n "${ES_SELECT_ID}" ] && [ -n "${ES_START_ID}" ] &&
