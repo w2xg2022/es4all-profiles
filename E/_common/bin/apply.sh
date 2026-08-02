@@ -124,10 +124,14 @@ selfmount_service() {
 #
 # 补跑安全: bind_over 对已经是挂载点的目标会跳过, 所以重跑只会补上还没挂的那些,
 # 不会去动执行中的 ES 本体(它开机时就挂好了)。
+#
+# ★判断「挂了没」要查 /proc/mounts, 不能用 mountpoint★(实机踩过 2026-08-02):
+# busybox 的 mountpoint 只认目录, 对档案一律 exit 1 —— 拿它当条件的话, 这里会判定
+# 「永远没挂」, 于是每次 ES 启动都重启一次服务, 而 selfmount 那边同样判定「还没挂」,
+# 就一层一层叠上去。与 selfmount.sh 的 is_bound() 是同一条规则, 两边必须一致。
 selfmount_refresh() {
 	[ -d "${OVERRIDE_DIR}" ] || return 0
 	command -v systemctl >/dev/null 2>&1 || return 0
-	command -v mountpoint >/dev/null 2>&1 || return 0
 
 	local f target need=0
 	for f in "${OVERRIDE_DIR}"/*; do
@@ -136,7 +140,7 @@ selfmount_refresh() {
 		# 只看【本来就存在】的目标 —— 与 selfmount.sh 的守卫同一条规则,
 		# 否则一个打错字的档名会让这里每次开机都白白重启服务。
 		[ -e "${target}" ] || continue
-		mountpoint -q "${target}" || need=1
+		awk -v p="${target}" '$2 == p { found = 1 } END { exit !found }' /proc/mounts || need=1
 	done
 
 	[ "${need}" -eq 1 ] && systemctl restart es4all-selfmount.service >/dev/null 2>&1

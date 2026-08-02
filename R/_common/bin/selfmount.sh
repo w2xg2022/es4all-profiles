@@ -28,12 +28,24 @@ LOG=/storage/.config/es4all/selfmount.log
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG}"; }
 
+# 这个目标已经被 bind-mount 过了吗?
+#
+# ★不能用 mountpoint★(实机踩过 2026-08-02): busybox 的 mountpoint 只认目录 ——
+# 对档案一律回 "Not a directory" 且 exit 1, 于是「已经挂过就跳过」这个守卫【永远不成立】,
+# 每跑一次就再叠一层 bind-mount(实机上 /usr/bin/emulationstation 已经叠了两层)。
+# 叠着当下看不出问题(最上层内容是对的), 但 umount 一次只掉一层, 会变成
+# 「明明卸载了却还是旧档」这种极难查的状况。
+# 直接查 /proc/mounts 的挂载点栏位, 档案与目录一体适用。
+is_bound() {
+	awk -v p="$1" '$2 == p { found = 1 } END { exit !found }' /proc/mounts
+}
+
 # 已经挂过就跳过(本服务是 oneshot, 但重跑要安全)。
 bind_over() {
 	src="$1"; dst="$2"
 	[ -e "${src}" ] || return 0
 	[ -e "${dst}" ] || { log "跳过 ${dst}: 目标不存在"; return 0; }
-	if mountpoint -q "${dst}"; then
+	if is_bound "${dst}"; then
 		log "跳过 ${dst}: 已经是挂载点"
 		return 0
 	fi

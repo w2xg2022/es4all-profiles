@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "version": "2026.08.02.17",
+  "version": "2026.08.02.18",
   "min_es4all_version": "1.1",
   "files": [
-    { "path": "E/_common/bin/apply.sh", "md5": "7e8a7f32ef40f870bf3b6e21799d52a9", "size": 10255 },
+    { "path": "E/_common/bin/apply.sh", "md5": "e6189525fe60f5074c6321532f17c872", "size": 10682 },
     { "path": "E/_common/bin/installtoemmc-engine.sh", "md5": "8eaa4ccccd88f7907e26d725d603e715", "size": 32093 },
     { "path": "E/_common/bin/installtoemmc.sh", "md5": "9088f20d21677fd705b6aaf1b1654c53", "size": 11874 },
-    { "path": "E/_common/bin/selfmount.sh", "md5": "074d3072f8371d05fcd45770b9b21a01", "size": 3289 },
+    { "path": "E/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "E/_common/bin/setaudio.sh", "md5": "3d777d942746c8d4a87d6fe9cbe05c13", "size": 3860 },
     { "path": "E/_common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "38c9efc1213a94d2a5bbacd0307cbc49", "size": 2067 },
     { "path": "E/_common/storage-config/es4all/override/ppsspp.sh", "md5": "dade7ee7be026ad86a71efda26e8551c", "size": 17775 },
@@ -18,7 +18,7 @@
     { "path": "E/MD1000/storage-config/es4all/emmc-layout.conf", "md5": "d7e6c352e2637628b0d85f8459a7e483", "size": 1838 },
     { "path": "E/MD1000/storage-config/es4all/psp-defaults.conf", "md5": "ab9d683b05ebfed65fa31c1940905435", "size": 718 },
     { "path": "E/X98mini/es-resources/audio_outputs.cfg", "md5": "3351e1e114de04c8a5eca7460d479b28", "size": 1167 },
-    { "path": "R/_common/bin/selfmount.sh", "md5": "074d3072f8371d05fcd45770b9b21a01", "size": 3289 },
+    { "path": "R/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "R/_common/storage-config/es4all/override/start_ppsspp.sh", "md5": "a096567f1584a82c01d2ec937278974f", "size": 6993 },
     { "path": "R/_common/storage-config/flycast/flycast.gptk", "md5": "86b89bae7b6b545952002f94c41222af", "size": 412 },
     { "path": "R/MD1000/es-resources/audio_outputs.cfg", "md5": "49d8ac6d0eced8240ade309b4eec0761", "size": 1281 }
