@@ -8,7 +8,11 @@ set -eu
 cd "$(dirname "$0")/.."
 
 SCHEMA=1
-MIN_ES4ALL=1.1
+# ★2026-08-02 目录改成 <target>/<DEVICE>/<SUBDEVICE> 后必须抬到 1.2★
+# 旧客户端只认得 A/E/R 那套，遇到新路径会当成「别的 target」整批略过 ——
+# 而且是【静默】略过(不认得 != 知道自己太旧)。靠这个门槛让旧版明确拒绝整包，
+# 而不是装作套用成功却一个档都没落地。
+MIN_ES4ALL=1.2
 
 if [ $# -ge 1 ]; then
 	VERSION=$1
@@ -19,8 +23,29 @@ else
 	VERSION="$today.$(( ${prev:-0} + 1 ))"
 fi
 
-# 收录 common/ 与 A|E|R/ 底下的一切；排除仓库自身的元数据
-files=$(find common A E R -type f 2>/dev/null | sed 's|^\./||' | sort || true)
+# 收录 common/ 与三个发行版目录底下的一切；排除仓库自身的元数据
+files=$(find common armbian emuelec rocknix -type f 2>/dev/null | sed 's|^\./||' | sort || true)
+
+# ★同名档漂移检查★(2026-08-02 加)
+# 真实需求不是「三边共用」而是「E+R 共用」——唯读 squashfs 那两边做法相同、
+# 可写 rootfs 的 armbian 不同，现有 scope 表达不了「部分 target 共用」。
+# 与其为此加一层组合 scope(下次可能又是别的组合)，不如让工具挡住会实际发生的事：
+# 忘记同步。同名不同内容就警告，同名同内容视为刻意的复制、只在冗长模式提示。
+#
+# ★只比对 <target>/_common/ 这一层★: 那里放的是【机制】(怎么做)，跨 target 常常
+# 是同一支脚本的复本(例: selfmount.sh 在 emuelec 与 rocknix 位元组相同)。
+# 机型资料档不在比对范围 —— audio_outputs.cfg 每台本来就不同，那是设计不是漂移，
+# 拿 basename 全域比会淹没在噪音里，噪音多的检查等於没有检查。
+for f in $files; do
+	case $f in */_common/*) ;; *) continue ;; esac
+	rel=${f#*/_common/}
+	printf '%s %s %s\n' "$rel" "$(md5sum "$f" | cut -d' ' -f1)" "$f"
+done | sort | awk '
+	{ rel = $1; md5 = $2; path = $3
+	  if (rel == prevrel && md5 != prevmd5)
+	      printf "⚠️  跨 target 的同名机制档内容不同(忘了同步?): %s <-> %s\n", prevpath, path > "/dev/stderr"
+	  prevrel = rel; prevmd5 = md5; prevpath = path }
+'
 
 {
 	printf '{\n'

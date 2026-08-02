@@ -1,6 +1,6 @@
 # es4all-profiles —— 机型专属配置文件
 
-ES4All（A / E / R 三个 target）在**运行期**下发的机型专属配置。
+ES4All（armbian / emuelec / rocknix 三个 target）在**运行期**下发的机型专属配置。
 
 目的：把「改一行数据就得重编固件、或至少发一包 ES」这件事拆掉。
 本仓库的改动**不经过 ES 发版，也不经过云编译**，设备端更新后重启即生效。
@@ -21,20 +21,51 @@ ES4All（A / E / R 三个 target）在**运行期**下发的机型专属配置�
 
 **scope（解析顺序，后者覆盖前者）**
 
-1. `common/` —— 三个 target 共用（目前是空的，见下方「保底只留一份」）
-2. `<T>/_common/` —— 该 target 全机型共用（T = `A` / `E` / `R`）
-3. `<T>/<机型>/` —— 该 target 的单一机型
+| rank | 路径 | 意思 |
+|---|---|---|
+| 0 | `common/` | 三个发行版共用（目前空著，见下方「保底只留一份」） |
+| 1 | `<target>/_common/` | 该发行版全机型 |
+| 2 | `<target>/<DEVICE>/_common/` | 该芯片家族全机型 |
+| 3 | `<target>/<DEVICE>/<SUBDEVICE>/` | 单一机型 |
 
-机型键 = `/proc/device-tree/model` 的**子串**，与 `audio_outputs.cfg` 同一套写法
-（如 `MD1000`、`E900V22C`、`X98mini`、`P6`）。
+`<target>` = `armbian` / `emuelec` / `rocknix`（**用发行版全名，不用 A/E/R 缩写** ——
+缩写省不了几个字，却让人每次都要回想 A 是哪个；目录名是给人读的）。
 
-> 为什么不是三个仓库：A/E/R 大部分内容相同，拆开必然漂移。
-> 三边真正的差异只有【落点路径】和【消费脚本】，用 scope 覆盖表达就够。
+`DEVICE` / `SUBDEVICE` **与建置系统同名同义**，别自己另创一套写法。现有对照
+（来源＝云编译 workflow 里的 `Resolve PROJECT/DEVICE for model`）：
 
-**只有这三层，不再多。** 曾考虑在 target 与机型之间加一层芯片家族
-（`_family/Amlogic/`），结论是暂不加：现在只有三台机器，加了只是多一个
-「该放哪层」要想；等真的出现两台以上重复同一份资料，再按当时看到的
-实际分家依据（可能是芯片、也可能是 codec 或 u-boot）来加。
+| SUBDEVICE | PROJECT | DEVICE |
+|---|---|---|
+| `MD1000` | Rockchip | `RK3566` |
+| `X98mini` / `E900V22C` | Amlogic-ce | `Amlogic-no` |
+
+### ⚠️ 两层的比对规则**不一样**，是刻意的
+
+- **DEVICE = 全等比对**。它是建置变数，值本来就是精确字串。
+  用子串会让 `RK3566` 命中 `RK356x`。
+  来源是「候选集合」而非单一档：`/etc/os-release` 的
+  `COREELEC_DEVICE`/`ROCKNIX_DEVICE`/`LIBREELEC_DEVICE`、`/ee_arch`、
+  Armbian 的 `BOARDFAMILY`，任一对上就算命中。
+  **为什么要收集成集合**：同一台机器的 DEVICE 在不同地方可能写得不一样 ——
+  MD1000 的云编译用 `DEVICE=RK3566`，但本地曾用 `DEVICE=MD1000` 编过，
+  於是 `/ee_arch` 里躺的是 `MD1000`。只认一个来源就会「明明是这台却不命中」，而且静默。
+- **SUBDEVICE = 子串比对**。它拿 `/proc/device-tree/model` 比，那是一长串描述，
+  用全等永远对不上。
+
+> 为什么不是三个仓库：三边大部分内容相同，拆开必然漂移。
+> 真正的差异只有【落点路径】和【消费脚本】，用 scope 覆盖表达就够。
+
+### 共用层：真实需求是「部分 target 共用」，不是「三边共用」
+
+`common/` 一直空著，不是没人用，是**猜错了共用的维度**：当初以为会沿
+「三边 vs 单边」分，实际是沿「**唯读 squashfs（emuelec/rocknix） vs 可写 rootfs（armbian）**」分。
+例：`selfmount.sh` 在 emuelec 与 rocknix 位元组相同，armbian 根本不需要 bind-mount。
+
+**结论是不为此加组合 scope**（`ER/` 这种；下次可能又是别的组合，解析规则会越长越乱），
+改用工具挡住会实际发生的事 —— 忘记同步。`tools/gen_manifest.sh` 会比对
+**各 target 的 `_common/` 底下相同相对路径**的档，内容不同就警告。
+机型资料档不在比对范围（`audio_outputs.cfg` 每台本来就不同，那是设计不是漂移；
+噪音多的检查等於没有检查）。
 
 ## 机制 vs 资料：什么放哪一层
 
@@ -42,14 +73,14 @@ ES4All（A / E / R 三个 target）在**运行期**下发的机型专属配置�
 
 | 放哪 | 放什么 | 例子 |
 |---|---|---|
-| `<T>/_common/bin/` | **机制**——怎么做 | `setaudio.sh` 的切换流程 |
-| `<T>/<机型>/` | **资料**——这台是什么 | `audio_outputs.cfg`、`asound.conf`、`emmc-layout.conf` |
+| `<target>/_common/bin/` | **机制**——怎么做 | `setaudio.sh` 的切换流程 |
+| `<target>/<DEVICE>/<SUBDEVICE>/` | **资料**——这台是什么 | `audio_outputs.cfg`、`asound.conf`、`emmc-layout.conf` |
 
 机制放在 target 层而不是 `common/`，是因为做法本来就分家：
 EmuELEC 裸 ALSA 改 asound.conf，ROCKNIX 走 PipeWire 改默认 sink。
 
 **逃生门**：若某台的流程真的不同（不只是参数不同，例如 MD1000 是重分区、
-X98mini 是重用原厂分区），在 `<T>/<机型>/bin/` 放一支同名脚本即可盖掉
+X98mini 是重用原厂分区），在 `<target>/<DEVICE>/<SUBDEVICE>/bin/` 放一支同名脚本即可盖掉
 `_common` 那份 —— 覆盖规则本来就是机型层赢，客户端不必改。
 
 ### ⚠️ 机型档是「整份取代」，不是叠加
@@ -78,7 +109,7 @@ EmuELEC 无值时会退回 `hw:0,0`，那在 X98mini 是死路无声。
 
 ### 覆盖 /usr/bin 里的发行版脚本(不必重编固件)
 
-把同名档放进 `<T>/_common/storage-config/es4all/override/`，
+把同名档放进 `<target>/_common/storage-config/es4all/override/`，
 落到设备的 `/storage/.config/es4all/override/`，
 开机时由 `es4all-selfmount.service` → `bin/selfmount.sh` **bind-mount 盖到 `/usr/bin/<同名>`**。
 
@@ -114,7 +145,7 @@ bind-mount 直接换掉档案本身，不依赖任何顺序。
 
 ### 键位精灵的触发钩子（controls-changed）
 
-`<T>/_common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh`
+`<target>/_common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh`
 → 落到 `/storage/.config/emulationstation/scripts/controls-changed/`。
 
 ES 存完键位会发 `controls-changed` 事件，`Scripting::fireEvent` 会把
@@ -148,11 +179,11 @@ ES 的事件机制只认 `scripts/<事件名>/` 这个位置。
 
 **dest-root（落点根，各 target 实际路径不同，由客户端解析）**
 
-| dest-root | A (Armbian) | E (EmuELEC) | R (ROCKNIX) |
+| dest-root | armbian | emuelec | rocknix |
 |---|---|---|---|
 | `es-resources/` | ES 用户 resources 目录 | 同左 | 同左 |
 | `storage-config/` | `~/.config/` | `/storage/.config/` | `/storage/.config/` |
-| `bin/` | `~/.config/es4all/bin/` | `/storage/.config/es4all/bin/` | 同 E |
+| `bin/` | `~/.config/es4all/bin/` | `/storage/.config/es4all/bin/` | 同 emuelec |
 
 `bin/` 放**可执行脚本**，客户端会自动补上执行位（`chmod 0755`）。
 与 `storage-config/` 分开是刻意的：补执行位这件事只该发生在这个落点，
