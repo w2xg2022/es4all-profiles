@@ -87,8 +87,12 @@ ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
 CONTROLS_INI="/storage/.config/ppsspp/PSP/SYSTEM/controls.ini"
 
 if [ -f "${CONTROLS_INI}" ]; then
+	# ★2026-08-02:选单键改成【按位置】(一律西 = SDL X = 10-191), 不再看印刷★
+	#   原本按印刷找「印着 X 的那颗」, 实机第二支手柄(任天堂式印刷)上炸掉:
+	#   算成北键, 而 RA 的 input_menu_toggle_btn 是**西**(RA 自己就按位置),
+	#   同一台机器上 RA 与 PSP/DC 要按不同颗。改按位置后三边统一, 也不再依赖佈局侦测。
+	#   代价:任天堂式手柄上那颗印的是 Y 不是 X —— 但 RA 本来就是这样, 一致。
 	MENU_KEY="10-191"
-	grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null && MENU_KEY="10-188"
 
 	# ★热键(和弦的修饰键)也从 ES 透传, 不再写死 10-196★
 	#   ES 的 es_input.cfg 记的是**实体按键编号**:
@@ -112,15 +116,25 @@ if [ -f "${CONTROLS_INI}" ]; then
 	PAD_GUID="$(gamepad_info -more 2>/dev/null | awk '/SDL GUID:/{print $3; exit}')"
 	PAD_GUID_NOCRC=""
 	[ ${#PAD_GUID} -ge 8 ] && PAD_GUID_NOCRC="$(echo "${PAD_GUID}" | cut -c1-4)0000$(echo "${PAD_GUID}" | cut -c9-)"
-	if [ -n "${PAD_GUID}" ] && [ -f "${ES_SETTINGS%es_settings.cfg}es_input.cfg" ]; then
-		HK_ID=$(awk -v g1="deviceGUID=\"${PAD_GUID}\"" \
-		            -v g2="deviceGUID=\"${PAD_GUID_NOCRC}\"" '
+	ES_INPUT_FILE="${ES_SETTINGS%es_settings.cfg}es_input.cfg"
+
+	# 从 es_input.cfg 取某一颗键的实体按键编号($1 = select / start / hotkeyenable)。
+	# ★只认 type="button"★: L2/R2 与摇杆在 ES 里记成 type="axis", 拿轴当和弦的修饰键
+	#   做不出来, 回传空值让呼叫端落回保底。(精灵那边已加说明, 建议热键选 SELECT。)
+	es_input_btn() {
+		awk -v g1="deviceGUID=\"${PAD_GUID}\"" \
+		    -v g2="deviceGUID=\"${PAD_GUID_NOCRC}\"" \
+		    -v nm="name=\"${1}\"" '
 			index($0, g1) || index($0, g2) { inblock=1 }
-			inblock && /name="hotkeyenable"/ && /type="button"/ {
+			inblock && index($0, nm) && /type="button"/ {
 				if (match($0, /id="[0-9]+"/)) { print substr($0, RSTART+4, RLENGTH-5); exit }
 			}
 			inblock && /<\/inputConfig>/ { inblock=0 }
-		' "${ES_SETTINGS%es_settings.cfg}es_input.cfg")
+		' "${ES_INPUT_FILE}"
+	}
+
+	if [ -n "${PAD_GUID}" ] && [ -f "${ES_INPUT_FILE}" ]; then
+		HK_ID=$(es_input_btn hotkeyenable)
 		case "${HK_ID}" in
 			0)  HOTKEY="10-189" ;;  1)  HOTKEY="10-190" ;;
 			2)  HOTKEY="10-191" ;;  3)  HOTKEY="10-188" ;;
@@ -129,7 +143,36 @@ if [ -f "${CONTROLS_INI}" ]; then
 			11) HOTKEY="10-106" ;;  12) HOTKEY="10-107" ;;
 			*)  ;;                  # 认不得(含空值/b10 home 无对应码)就保底
 		esac
-		[ -n "${HK_ID}" ] && echo "PSP HOTKEY from ES: button ${HK_ID} -> ${HOTKEY}"
+		if [ -n "${HK_ID}" ]; then
+			echo "PSP HOTKEY from ES: button ${HK_ID} -> ${HOTKEY}"
+		else
+			echo "PSP HOTKEY not usable from ES (missing, or bound to an analog axis such as L2/R2) -> fallback ${HOTKEY}"
+		fi
+
+		# ★SELECT / START 也从 ES 透传 —— 但机制与 flycast 完全不同, 别照抄★
+		#   起因(实机第二支手柄坐实): 那支是任天堂式手柄, 面板只有「−」与「+」两颗,
+		#   哪一颗算 SELECT、哪一颗算 START **没有客观答案**, 反过来指定也说得通
+		#   —— 既然是使用者的选择, 就只有键位精灵写进 es_input.cfg 的那笔算数。
+		#
+		#   ⚠️ flycast 的 [combo] 直接写**实体按键编号**, 把 ES 的值填进去就成;
+		#      PPSSPP 用的是 device-10 的 **SDL 语意码**(10-196=BACK、10-197=START),
+		#      「哪颗实体键产生 10-196」是 **SDL 依 gamecontrollerdb 决定的**, 改不了。
+		#   → 故做法是**侦测使用者的选择是否与 gamecontrollerdb 相反**,
+		#     相反就把 controls.ini 里 Select / Start 两行的语意码对调, 结果等价。
+		#   两边都读得到才比对; 任一读不到就什么都不做(维持原样), 不猜。
+		ES_SELECT_ID=$(es_input_btn select)
+		ES_START_ID=$(es_input_btn start)
+		GCDB_FILE="${SDL_GAMECONTROLLERCONFIG_FILE:-/storage/.config/SDL-GameControllerDB/gamecontrollerdb.txt}"
+		GC_LINE=$(grep -m1 -E "^(${PAD_GUID}|${PAD_GUID_NOCRC})," "${GCDB_FILE}" 2>/dev/null)
+		GC_BACK_ID=$(echo "${GC_LINE}"  | grep -oE 'back:b[0-9]+'  | grep -oE '[0-9]+$')
+		GC_START_ID=$(echo "${GC_LINE}" | grep -oE 'start:b[0-9]+' | grep -oE '[0-9]+$')
+		if [ -n "${ES_SELECT_ID}" ] && [ -n "${ES_START_ID}" ] &&
+		   [ -n "${GC_BACK_ID}" ] && [ -n "${GC_START_ID}" ] &&
+		   [ "${ES_SELECT_ID}" = "${GC_START_ID}" ] && [ "${ES_START_ID}" = "${GC_BACK_ID}" ]; then
+			echo "PSP: ES 的 SELECT/START 与 gamecontrollerdb 相反(ES select=b${ES_SELECT_ID} start=b${ES_START_ID}), 对调 controls.ini"
+			sed -i "/^Select = /s/10-19[67]/10-197/" "${CONTROLS_INI}"
+			sed -i "/^Start = /s/10-19[67]/10-196/"  "${CONTROLS_INI}"
+		fi
 	fi
 
 	# 有该行就改、没有就补。键名含空格, sed 的位址要完整比对到 " = "。

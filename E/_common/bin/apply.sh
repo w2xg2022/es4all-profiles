@@ -35,7 +35,6 @@ mkdir -p "${STAMP_DIR}"
 # ---------------------------------------------------------------------------
 psp_defaults() {
 	local stamp="${STAMP_DIR}/.psp-defaults-applied"
-	[ -f "${stamp}" ] && return 0
 
 	# 全机种预设值。机型资料档可覆盖(见下), 没有资料档就用这两个。
 	#   BACKEND: OPENGL | VULKAN     RESOLUTION: 内部分辨率倍数(2 = 2X)
@@ -56,6 +55,19 @@ psp_defaults() {
 		v=$(sed -n 's/^[[:space:]]*RESOLUTION[[:space:]]*=[[:space:]]*//p' "${conf}" | head -1)
 		[ -n "${v}" ] && RESOLUTION="${v}"
 	fi
+
+	# ★2026-08-02:标记档改成【记住套用了什么值】, 不再只记「做过了」★
+	#   实机踩到的洞(MD1000): 标记档 08:27 生成、机型资料档 11:57 才下发 ——
+	#   `[ -f stamp ] && return` 在资料到位【之前】就永久封印了这段,
+	#   于是 psp-defaults.conf 写着 VULKAN, 实机却一直是 OpenGL,
+	#   而且**完全静默**, 看设定档只会觉得「设了没用」。
+	#   改成比对内容后, 这两种情形都能自愈:
+	#     ①机型资料晚于首次开机才下发  ②我们日后调整了建议值(改 conf 就会重新套用)
+	#   ⚠️ 仍**不是**每次开机强制: 值没变就不动, 使用者自己在 PPSSPP 里改过的画质会留着。
+	#     只有「profile 给的建议值本身变了」才会再套一次 —— 那正是我们要它生效的时候。
+	#   (旧的空标记档内容不等于任何 want, 会自动重跑一次, 不必手动清。)
+	local want="BACKEND=${BACKEND} RESOLUTION=${RESOLUTION}"
+	[ "$(cat "${stamp}" 2>/dev/null)" = "${want}" ] && return 0
 
 	# ① 预设用【独立】PPSSPP 而不是 libretro 核心。
 	#    psp.core / psp.emulator 优先于 es_systems.cfg 的默认值(两个键都要设,
@@ -79,7 +91,8 @@ psp_defaults() {
 		sed -i "s|^InternalResolution = .*|InternalResolution = ${RESOLUTION}|" "${PPINI}"
 	fi
 
-	touch "${stamp}"
+	echo "${want}" > "${stamp}"
+	echo "es4all: PSP defaults applied -> ${want}"
 }
 
 # ---------------------------------------------------------------------------
@@ -105,6 +118,8 @@ selfmount_service() {
 # ES 的选单与实际启动路径分别读它们, 只设一个会出现「选单显示 A、实际跑 B」。
 # 值取自 es_systems.cfg 的 <emulator name="flycastsa"><core default="true">flycastsa。
 # ★同样只在第一次套用★(标记档把关): 使用者后来自己改回 libretro 不该被开机流程覆盖。
+# 这里的值写死在本档、没有机型资料档, 所以不会有 psp_defaults 那个「资料晚到」的洞;
+# 但要是哪天 DC 也加了机型资料, 记得比照 psp_defaults 改成【比对内容】的标记档。
 dc_defaults() {
 	local stamp="${STAMP_DIR}/.dc-defaults-applied"
 	[ -f "${stamp}" ] && return 0

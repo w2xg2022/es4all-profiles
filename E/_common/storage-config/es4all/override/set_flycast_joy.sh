@@ -120,11 +120,52 @@ clean_pad() {
 # ${3} = Device GUID
 # ${4} = Device Name
 
+ES_INPUT="/storage/.config/emulationstation/es_input.cfg"
+
+# 从 es_input.cfg 取某一颗键的【实体按键编号】。
+#   $1 = 输入名(select / start / hotkeyenable ...)
+#   需要先设好 ES_GUID / ES_GUID_NOCRC。
+#
+# ★只认 type="button", 类比轴(type="axis")一律不回传★
+#   摇杆与 L2/R2 扳机在 ES 里记成 axis, 而 flycast 的 [combo] 只吃数位按键编号,
+#   拿轴当修饰键做不出来 —— 回传空值让呼叫端落回保底, 并在 log 讲明原因。
+#   (键位精灵那边已加说明文字, 建议使用者热键选 SELECT。)
+es_input_btn() {
+  [[ -f "${ES_INPUT}" && -n "${ES_GUID}" ]] || return
+  awk -v g1="deviceGUID=\"${ES_GUID}\"" \
+      -v g2="deviceGUID=\"${ES_GUID_NOCRC}\"" \
+      -v nm="name=\"${1}\"" '
+      index($0, g1) || index($0, g2) { inblock=1 }
+      inblock && index($0, nm) && /type="button"/ {
+          if (match($0, /id="[0-9]+"/)) { print substr($0, RSTART+4, RLENGTH-5); exit }
+      }
+      inblock && /<\/inputConfig>/ { inblock=0 }
+  ' "${ES_INPUT}"
+}
+
 set_pad() {
   echo "set_pad params: ${1} ${2} ${3} ${4}"
   local JOY_NAME="${4}"
   local ORDER=${7}
   local i=$(( ${1} - 1 ))
+
+  # ★GUID 要在这里就算好★: 下面撷取按键编号时就得用到, 不能等到组合键那段才算。
+  #   执行期 GUID 带 SDL 2.26+ 的 CRC-16(030081b8...), ES 档里是 03000000...,
+  #   只差第 5~8 个字元 —— 比照 ES 自己 rebuildAllJoysticks() 的做法抹掉那段, 两种都试。
+  ES_GUID="${3}"
+  ES_GUID_NOCRC=""
+  [[ ${#ES_GUID} -ge 8 ]] && ES_GUID_NOCRC="${ES_GUID:0:4}0000${ES_GUID:8}"
+
+  # ★2026-08-02:SELECT / START / 热键三颗一律从 ES 透传, 不用 gamecontrollerdb★
+  #   理由(实机第二支手柄坐实):这支是任天堂式手柄, 面板上是「−」与「+」两颗,
+  #   **哪一颗算 SELECT、哪一颗算 START 根本没有客观答案** —— 反过来指定也完全说得通。
+  #   既然是使用者的选择, 就只有键位精灵写进 es_input.cfg 的那笔算数;
+  #   gamecontrollerdb 只是社群按自己的惯例填的, 与使用者的选择不保证一致。
+  #   ⚠️ 面键(A/B/X/Y)**不在此列**: 它们照旧走 gamecontrollerdb 的位置对齐(见档案
+  #      上方三层架构那段), 这里只透传「系统键」。
+  local ES_SELECT="$(es_input_btn select)"
+  local ES_START="$(es_input_btn start)"
+  echo "es4all: from ES -> select=${ES_SELECT:-(无)} start=${ES_START:-(无)}"
 
   # Vars to dinamically set triggers
   local L_TR_AXIS=""
@@ -174,7 +215,7 @@ set_pad() {
   # NOTE(w2xg2022): 捕捉SELECT/START/肩键L1R1/西键(X)各自的实体按键码，
   # 供下面统一生成[combo]组合键区块使用(flycast v4原生支持真正的按键组合，
   # 不需要gptokeyb外挂)。
-  local NUM_SELECT="" NUM_START="" NUM_L1="" NUM_R1="" NUM_WESTX="" NUM_NORTHY=""
+  local NUM_SELECT="" NUM_START="" NUM_L1="" NUM_R1="" NUM_WESTX=""
 
   for REC in "${GC_ARRAY[@]}"; do
       local KEY=$(echo ${REC} | cut -d ":" -f 1)
@@ -189,14 +230,13 @@ set_pad() {
       #   是两件事, 别绑在一起。
       if [[ "${TYPE}" == "b" ]]; then
           case "${KEY}" in
-              back)          NUM_SELECT="${NUM}" ;;
-              start)         NUM_START="${NUM}" ;;
+              # SELECT/START 以 ES 为准, gamecontrollerdb 只当读不到时的保底(见上方说明)。
+              back)          NUM_SELECT="${ES_SELECT:-${NUM}}" ;;
+              start)         NUM_START="${ES_START:-${NUM}}" ;;
               leftshoulder)  NUM_L1="${NUM}" ;;
               rightshoulder) NUM_R1="${NUM}" ;;
+              # 选单和弦用的那颗 = **西**(SDL 的 x), 按位置不按印刷, 理由见下方组合键那段。
               x)             NUM_WESTX="${NUM}" ;;
-              # NOTE(w2xg2022 2026-08-02): 北键也要记 —— 任天堂式印刷时「印着 X 的那颗」
-              #   在北(SDL 的 y),见下方组合键那段。
-              y)             NUM_NORTHY="${NUM}" ;;
           esac
       fi
 
@@ -221,6 +261,9 @@ set_pad() {
           # DIGITAL SECTION
           local FINAL_NUM=${NUM}
           [[ "${TYPE}" == "h" ]] && FINAL_NUM=${FLYCAST_D_INDEXES[${TVAL}]}
+          # 遊戲內的 START 也要跟着 ES 走 —— 使用者把「＋」指定成 START, 遊戲裡按「＋」
+          # 就该是 Start, 不能还照 gamecontrollerdb 的惯例绑到另一颗。
+          [[ "${KEY}" == "start" && -n "${ES_START}" ]] && FINAL_NUM="${ES_START}"
 
           echo "bind$((B_COUNT_D++)) = ${FINAL_NUM}:${ACTION}" >> "${CONFIG_TMP_D}"
       fi
@@ -235,43 +278,22 @@ set_pad() {
   #   读不到才退回 SDL 的 back —— 那只是保底, 不是预期路径。
   #   ★按【装置名】比对, 不能按 GUID★: SDL 2.26+ 在 GUID 里塞了 CRC-16,
   #   执行期取到 030081b85e04...、ES 记的是 030000005e04..., 按 GUID 必然【静默】落空。
-  local ES_INPUT="/storage/.config/emulationstation/es_input.cfg"
-  # ★2026-08-02 真因:查 es_input.cfg 必须按【GUID(剥掉 CRC)】, 不能按名字★
-  #   这台机器上同一支手柄有**三个不同的名字**:
-  #       UDEV 名(joy_common 传进来的 ${4}) : "Microsoft X-Box 360 pad"
-  #       SDL_JoystickName(gamepad_info)    : "X360 Controller"
-  #       gamecontrollerdb 映射名 = ES 写进 es_input.cfg 的 deviceName
-  #                                         : "Xbox 360 Controller"
-  #   原本用 JOY_NAME(UDEV 名)查, **永远命中不了** —— 而保底值 NUM_SELECT 刚好也是 6,
-  #   与 ES 的 hotkeyenable=6 撞成同值, 所以输出看起来完全正确, 从外部分辨不出来。
-  #   ★验证陷阱:别用「产出的 [combo] 是不是 6」判断透传有没有生效, 要看有没有印出
-  #     下面那行 log; 或把 ES 的热键改成别的键再看有没有跟着变。★
+  #   ★查 es_input.cfg 一律按【GUID(剥掉 CRC)】, 不能按名字★(实机踩过):
+  #   同一支手柄有三个名字 —— UDEV 名 "Microsoft X-Box 360 pad"、SDL_JoystickName
+  #   "X360 Controller"、ES 写进档案的 deviceName(= gamecontrollerdb 映射名)
+  #   "Xbox 360 Controller"。按名字查必然静默落空。GUID 的差异只在 CRC 段, 见 es_input_btn()。
   #
-  #   改用 GUID 比对, 与名字完全脱钩:
-  #     执行期 GUID(SDL 2.26+ 带装置名的 CRC-16): 030081b8 5e0400008e02000010010000
-  #     ES 档里的                                : 03000000 5e0400008e02000010010000
-  #   两者只差第 5~8 个字元那段 CRC —— ES 自己在 rebuildAllJoysticks() 也是把这段抹成
-  #   0 再比对, 这里照做, 两种写法都试。
+  #   ★验证陷阱:别用「产出的 [combo] 编号对不对」判断透传有没有生效★
+  #   保底值(SELECT)常与实际热键撞成同值, 输出与成功时逐字节相同。要看下面这行 log。
   local NUM_HOTKEY="${NUM_SELECT}"
-  local ES_GUID="${3}"
-  local ES_GUID_NOCRC=""
-  [[ ${#ES_GUID} -ge 8 ]] && ES_GUID_NOCRC="${ES_GUID:0:4}0000${ES_GUID:8}"
-  if [[ -f "${ES_INPUT}" && -n "${ES_GUID}" ]]; then
-      local HK
-      HK=$(awk -v g1="deviceGUID=\"${ES_GUID}\"" \
-               -v g2="deviceGUID=\"${ES_GUID_NOCRC}\"" '
-          index($0, g1) || index($0, g2) { inblock=1 }
-          inblock && /name="hotkeyenable"/ && /type="button"/ {
-              if (match($0, /id="[0-9]+"/)) { print substr($0, RSTART+4, RLENGTH-5); exit }
-          }
-          inblock && /<\/inputConfig>/ { inblock=0 }
-      ' "${ES_INPUT}")
-      if [[ -n "${HK}" ]]; then
-          NUM_HOTKEY="${HK}"
-          echo "es4all: hotkey from ES = button ${HK} (guid ${ES_GUID_NOCRC})"
-      else
-          echo "es4all: hotkey NOT found in es_input.cfg for guid ${ES_GUID_NOCRC}, fallback to select=${NUM_SELECT}"
-      fi
+  local HK="$(es_input_btn hotkeyenable)"
+  if [[ -n "${HK}" ]]; then
+      NUM_HOTKEY="${HK}"
+      echo "es4all: hotkey from ES = button ${HK} (guid ${ES_GUID_NOCRC})"
+  else
+      # 落空的两种情形:①ES 里没有这支手柄的条目 ②热键被指到**类比轴**(L2/R2)。
+      # 后者 flycast 做不出组合键(见 es_input_btn 说明), 只能退回 SELECT。
+      echo "es4all: hotkey not usable from ES (missing, or bound to an analog axis such as L2/R2) -> fallback to select=${NUM_SELECT}"
   fi
 
   # ★热键那颗绝不能留任何单键绑定★(原理见档案上方 [back] 那段注解):
@@ -316,11 +338,16 @@ set_pad() {
     [[ -n "${NUM_R1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_R1}:btn_quick_save:0" >> "${CONFIG}"
     [[ -n "${NUM_L1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_L1}:btn_jump_state:0" >> "${CONFIG}"
 
-    local ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
+    # ★2026-08-02:选单键改成【按位置】(一律西), 不再看印刷 InvertButtons★
+    #   原本按印刷找「印着 X 的那颗」, 实机第二支手柄(任天堂式印刷)上炸掉:
+    #   算出北键, 而 RA 的 input_menu_toggle_btn 是**西**(RA 自己就按位置) ->
+    #   同一台机器上 RA 与 DC/PSP 要按不同颗, 使用者只会觉得「DC 叫不出选单」。
+    #
+    #   改按位置后:①三边(RA / DC / PSP)一律是西那颗, 心智模型统一;
+    #             ②不再依赖佈局侦测, 侦测错了也不影响选单叫不叫得出来;
+    #             ③本脚本对 ES 的依赖收敛成**只剩 SELECT / START / 热键**三颗系统键。
+    #   代价:任天堂式印刷的手柄上, 那颗印的是 Y 不是 X —— 但 RA 本来就是这样, 一致。
     local NUM_MENUKEY="${NUM_WESTX}"
-    if grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null; then
-        [[ -n "${NUM_NORTHY}" ]] && NUM_MENUKEY="${NUM_NORTHY}"
-    fi
     [[ -n "${NUM_MENUKEY}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_MENUKEY}:btn_menu:0" >> "${CONFIG}"
   fi
 
