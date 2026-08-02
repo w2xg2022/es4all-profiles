@@ -38,7 +38,15 @@ declare -A FLYCAST_D_BUTTONS=(
   [rightshoulder]="btn_d"
   [lefttrigger]="btn_trigger_left"
   [righttrigger]="btn_trigger_right"
-  [back]="btn_menu"
+  # NOTE(w2xg2022 2026-08-02 第三版): ★[back]="btn_menu" 已移除 —— 它是所有组合键失效的元凶★
+  #   flycast 在**按键按下的当下就比对一次**(gamepad_device.cpp:168 一按下就
+  #   get_button_id(currentInputs))。单键绑定与组合键存在**同一张表**
+  #   (mapping.h:211 把单键包成「只有一个元素的 ButtonCombo」)。
+  #   于是「SELECT 单按 = 开选单」一成立, 按下 SELECT 的瞬间选单就跳出来,
+  #   第二颗键被选单介面吃掉 -> 退出/存档/读档三组**永远凑不成**。
+  #   ★「单按开选单」与「当组合键的第一颗」在机制上互斥, 没有两全★, 故取后者:
+  #   改成 热键+X 开选单, 与 RA / PSP 完全一致(三边同一套心智模型),
+  #   代价只是开选单多按一颗, 换回存档/读档/退出三个功能。
   [start]="btn_start"
   [guide]="btn_escape"
   # NOTE(w2xg2022 2026-08-02): 移除 [rightstick]="btn_fforward" —— 用户明确表示快进不需要。
@@ -58,6 +66,19 @@ declare -A FLYCAST_D_BUTTONS=(
 # 不再透传、不再看任何 ES 开关(原 InvertGameButtons/InvertXYButtons 已从 ES 移除)。
 # 直接写死成「位置对齐」的值(等同旧默认，实机验证正确)：AB 位置对齐(物理南→DC B、
 # 东→DC A)、XY 走标签对齐(下面 XY 分支不触发)。保留下面 if 结构以维持输出完全一致。
+#
+# ★2026-08-02 复审结论:维持 AB 位置对齐, 别再改回标签对齐(已评估并否决)★
+#   现象:flycast 选单要按**印着 B**(物理东)那颗才能确认, 与 ES/RA/PSP 相反。
+#   机制:**flycast 选单没有独立的导航绑定**, 直接把 DC 的 A 当「确认」——
+#     core/ui/gui.cpp:419  io.AddKeyEvent(ImGuiKey_GamepadFaceDown, kcode[0] & DC_BTN_A)
+#   Dreamcast 原厂 A 在**东**, 位置对齐后物理东(印刷 B)→DC A, 所以是本设定的直接结果。
+#   因为选单与游戏内共用同一份映射, **改选单必然连游戏内一起改, 没有两全** ——
+#   用户裁定:游戏手感优先, 接受 DC 选单用东(印刷 B)确认。
+#
+#   PSP / RA 不受影响(三边情况各不相同, 别照抄):
+#     RA  : 有选单专用开关 menu_swap_ok_cancel_buttons(=false), 确认已是物理南=印刷 A。
+#     PSP : 与 DC 同样「选单吃游戏键」, 但 PPSSPP 用「✕」当确认, ✕ 本来就在南 = 印刷 A,
+#           碰巧一致 —— DC 是唯一「原厂 A 不在南」的主机, 所以只有它会撞。
 EE_INVERT_AB="true"
 EE_INVERT_XY="false"
 
@@ -121,13 +142,28 @@ set_pad() {
   sed -i "s/device${1}\.2.*/device${1}.2 = 1/g" "${EMU_FILE}"
   sed -i "s/maple_sdl_joystick_${i}.*/maple_sdl_joystick_${i} = ${ORDER}/g" "${EMU_FILE}"
 
-  local CONFIG="${MAPPING_DIR}/SDL_${JOY_NAME}.cfg"
+  # ★2026-08-02 真因:档名要用【SDL 映射名】, 不是核心名★
+  #   flycast 组档名是 api_name() + "_" + name()(gamepad_device.cpp:552),
+  #   而 SDL 对已识别手柄回传的 name() 是 **gamecontrollerdb 里的映射名**
+  #   (本机: "Xbox 360 Controller"), 不是核心名(SDL_JoystickName: "Microsoft X-Box 360 pad")。
+  #   原本写成核心名 -> flycast 找不到 -> 一路使用**内建预设映射**,
+  #   我们产的整份设定(含 [combo])**从来没被读过**。
+  #   ★这个洞极难发现★: 内建预设的游戏内按键刚好是对的、Back 又刚好开选单,
+  #   看起来「设定有生效」, 只有组合键这种预设没有的东西才会暴露。
+  #   实机验证: 同内容另存成 SDL_Xbox 360 Controller.cfg 后, SELECT+X 立刻能开选单。
+  #   映射名 = gamecontrollerdb 那行的第 2 栏(第 1 栏是 GUID, 第 3 栏起是键位)。
+  local GC_CONFIG="${5}"
+  [[ -z ${GC_CONFIG} ]] && return
+  local GC_NAME=$(echo "${GC_CONFIG}" | cut -d',' -f2)
+  [[ -z "${GC_NAME}" ]] && GC_NAME="${JOY_NAME}"
+
+  local CONFIG="${MAPPING_DIR}/SDL_${GC_NAME}.cfg"
+  # 顺手清掉旧版留下的「核心名」那份, 免得目录里两个档看起来像都有效。
+  [[ -f "${MAPPING_DIR}/SDL_${JOY_NAME}.cfg" ]] && rm -f "${MAPPING_DIR}/SDL_${JOY_NAME}.cfg"
   [[ -f "${CONFIG}" ]] && rm "${CONFIG}"
 
   > "${CONFIG_TMP_A}"; > "${CONFIG_TMP_D}"; > "${CONFIG_TMP_E}"
 
-  local GC_CONFIG="${5}"
-  [[ -z ${GC_CONFIG} ]] && return
   local GC_MAP=$(echo ${GC_CONFIG} | cut -d',' -f3-)
   set -f
   local GC_ARRAY=(${GC_MAP//,/ })
@@ -145,6 +181,25 @@ set_pad() {
       local TVAL=$(echo ${REC} | cut -d ":" -f 2)
       local TYPE=${TVAL:0:1}
       local NUM=${TVAL:1}
+      # NOTE(w2xg2022): 只在实体按键(b类型)时记录，摇杆方向(h/a类型)不适用组合键。
+      # ★2026-08-02 第三版:这段必须放在 `[[ -z "${ACTION}" ]] && continue` 【之前】★
+      #   拿掉 [back]="btn_menu" 之后 back 在对照表里没有动作, 会被那行 continue 跳过,
+      #   于是 NUM_SELECT 永远是空 -> NUM_HOTKEY 空 -> **整个 [combo] 区块被跳过**。
+      #   实机踩过:产出只有 [digital]、没有 [combo]。记录按键码与「有没有 digital 动作」
+      #   是两件事, 别绑在一起。
+      if [[ "${TYPE}" == "b" ]]; then
+          case "${KEY}" in
+              back)          NUM_SELECT="${NUM}" ;;
+              start)         NUM_START="${NUM}" ;;
+              leftshoulder)  NUM_L1="${NUM}" ;;
+              rightshoulder) NUM_R1="${NUM}" ;;
+              x)             NUM_WESTX="${NUM}" ;;
+              # NOTE(w2xg2022 2026-08-02): 北键也要记 —— 任天堂式印刷时「印着 X 的那颗」
+              #   在北(SDL 的 y),见下方组合键那段。
+              y)             NUM_NORTHY="${NUM}" ;;
+          esac
+      fi
+
       local ACTION=${FLYCAST_D_BUTTONS[${KEY}]}
 
       [[ -z "${ACTION}" ]] && continue
@@ -170,66 +225,49 @@ set_pad() {
           echo "bind$((B_COUNT_D++)) = ${FINAL_NUM}:${ACTION}" >> "${CONFIG_TMP_D}"
       fi
 
-      # NOTE(w2xg2022): 只在实体按键(b类型)时记录，摇杆方向(h/a类型)不适用组合键。
-      if [[ "${TYPE}" == "b" ]]; then
-          case "${KEY}" in
-              back)          NUM_SELECT="${NUM}" ;;
-              start)         NUM_START="${NUM}" ;;
-              leftshoulder)  NUM_L1="${NUM}" ;;
-              rightshoulder) NUM_R1="${NUM}" ;;
-              x)             NUM_WESTX="${NUM}" ;;
-              # NOTE(w2xg2022 2026-08-02): 北键也要记 —— 任天堂式印刷时「印着 X 的那颗」
-              #   在北(SDL 的 y),见下方组合键那段。
-              y)             NUM_NORTHY="${NUM}" ;;
-          esac
-      fi
   done
 
   echo "[analog]" > "${CONFIG}"
   cat "${CONFIG_TMP_A}" | sort >> "${CONFIG}"
 
-  # NOTE(w2xg2022 2026-08-02): ★修 SELECT 单键同时绑到 menu 与 escape★
-  #   对照表里 [back]=btn_menu、[guide]=btn_escape。但**很多山寨 Xbox 手柄没有 Guide 键**,
-  #   gamecontrollerdb 里 back 与 guide 会解析到同一个按键号 —— 实机(Microsoft X-Box 360 pad)
-  #   产出就是 `bind2 = 6:btn_menu` 与 `bind7 = 6:btn_escape` 并存, SELECT 单按会同时
-  #   触发呼出选单与退出, 行为未定义。
-  #   处置: 撞号时**丢掉 escape 那条单键**, 保留 menu(呼出选单是主要用途);
-  #   退出仍然可用, 走下面的 SELECT+START 组合键。
-  if [[ -n "${NUM_SELECT}" ]]; then
-      sed -i "/= ${NUM_SELECT}:btn_escape\$/d" "${CONFIG_TMP_D}"
-  fi
-
-  # NOTE(w2xg2022 2026-08-02): ★选单键改抓 ES 的热键(hotkeyenable), 不再只跟 SDL 的 back★
-  #   Flycast 单按热键就开主选单, 所以「哪一颗是选单键」= 「哪一颗是热键」。
-  #   而热键是 **ES 侧的定义**、使用者可以在 ES 里改:
-  #       es_input.cfg: <input name="hotkeyenable" type="button" id="6" />
-  #   原本用的 NUM_SELECT 来自 gamecontrollerdb 的 back —— 在这支手柄上两者
-  #   碰巧都是 6, 但那是巧合。使用者把热键改成别的键(例如 Guide)就不会跟着变。
-  #   ⚠️ 只在「ES 真的记了这支手柄的 hotkeyenable」且与 back 不同时才改写;
-  #      读不到就保持原状(退回 back), 不猜。
-  #
-  #   ★按【装置名】比对, 不能按 GUID★:SDL 2.26+ 在 GUID 里塞了 CRC-16,
-  #   joy_common 拿到的是 030081b85e04...、ES 记的是 030000005e04...,
-  #   同一支手柄两串不一样, 按 GUID 比对必然落空(而且是静默落空)。
+  # NOTE(w2xg2022 2026-08-02 第三版): ★热键(组合键的修饰键)一律从 ES 透传, 不写死★
+  #   来源 = es_input.cfg 的 hotkeyenable(实体按键编号)。使用者在 ES 里改热键, 这里跟着改。
+  #   读不到才退回 SDL 的 back —— 那只是保底, 不是预期路径。
+  #   ★按【装置名】比对, 不能按 GUID★: SDL 2.26+ 在 GUID 里塞了 CRC-16,
+  #   执行期取到 030081b85e04...、ES 记的是 030000005e04..., 按 GUID 必然【静默】落空。
   local ES_INPUT="/storage/.config/emulationstation/es_input.cfg"
+  local NUM_HOTKEY="${NUM_SELECT}"
   if [[ -f "${ES_INPUT}" && -n "${JOY_NAME:-}" ]]; then
       local HK
       HK=$(awk -v nm="deviceName=\"${JOY_NAME}\"" '
           index($0, nm) { inblock=1 }
           inblock && /name="hotkeyenable"/ && /type="button"/ {
-              if (match($0, /id="[0-9]+"/)) {
-                  print substr($0, RSTART+4, RLENGTH-5); exit
-              }
+              if (match($0, /id="[0-9]+"/)) { print substr($0, RSTART+4, RLENGTH-5); exit }
           }
           inblock && /<\/inputConfig>/ { inblock=0 }
       ' "${ES_INPUT}")
-      if [[ -n "${HK}" && "${HK}" != "${NUM_SELECT}" ]]; then
-          # 把选单从 back 移到 ES 指定的热键上
-          sed -i "/= ${NUM_SELECT}:btn_menu\$/d" "${CONFIG_TMP_D}"
-          echo "bind$((B_COUNT_D++)) = ${HK}:btn_menu" >> "${CONFIG_TMP_D}"
-          echo "es4all: menu key follows ES hotkeyenable (button ${HK})"
+      if [[ -n "${HK}" ]]; then
+          NUM_HOTKEY="${HK}"
+          echo "es4all: hotkey from ES = button ${HK}"
       fi
   fi
+
+  # ★热键那颗绝不能留任何单键绑定★(原理见档案上方 [back] 那段注解):
+  #   只要它单独一颗就有作用, flycast 在按下的瞬间就触发, 组合键永远凑不成。
+  #   [back]=btn_menu 已从对照表移除; [guide]=btn_escape 在**没有独立 Guide 键**的手柄上
+  #   会与 back 撞号(实机 X-Box 360 pad 两者都解析成 6), 产出单键 escape —— 一并删掉。
+  if [[ -n "${NUM_HOTKEY}" ]]; then
+      sed -i "/= ${NUM_HOTKEY}:btn_escape\$/d" "${CONFIG_TMP_D}"
+      sed -i "/= ${NUM_HOTKEY}:btn_menu\$/d" "${CONFIG_TMP_D}"
+  fi
+
+  # NOTE(w2xg2022 2026-08-02): ★删完必须重新编号★
+  #   上面两处 sed -d(拿掉撞号的 escape 单键、把选单移到 ES 热键)会在 bindN 留下
+  #   **编号空洞** —— 实测产出过 bind0..bind6 + bind8..bind12(bind7 不见了)。
+  #   flycast 若是从 bind0 逐一往下读、遇缺号就停, 后面那几个(L1/R1/START/X/Y)会全失效。
+  #   没去确认它容不容忍空洞 —— 但留着毫无好处, 这里按原顺序重排成连续编号。
+  awk -F' = ' '{ print "bind" (n++) " = " $2 }' "${CONFIG_TMP_D}" > "${CONFIG_TMP_D}.renum" \
+      && mv -f "${CONFIG_TMP_D}.renum" "${CONFIG_TMP_D}"
 
   echo -e "\n[digital]" >> "${CONFIG}"
   cat "${CONFIG_TMP_D}" | sort >> "${CONFIG}"
@@ -239,24 +277,33 @@ set_pad() {
   # 按住」而非「依序按下」(flycast的ButtonCombo::sequential语义)。四者都要
   # SELECT有实际按键码才写入，缺任一方就跳过避免产生无效combo。flycast原生
   # 没有FPS显示切换的可绑定动作，此项无法比照RA做到，故不在此生成。
-  if [[ -n "${NUM_SELECT}" ]]; then
-    echo -e "\n[combo]" >> "${CONFIG}"
+  # NOTE(w2xg2022 2026-08-02 第三版): 四组组合键, ★修饰键与选单键都从 ES 透传, 一个都不写死★
+  #   修饰键 = NUM_HOTKEY(上面从 es_input.cfg 的 hotkeyenable 取得; 读不到才退回 back)
+  #   选单键 = 「印着 X 的那颗」。位置资讯两边本来就对齐(都从 gamecontrollerdb 推导),
+  #            但**印刷资讯只有 ES 知道**, 故读 es_settings.cfg 的 InvertButtons:
+  #              false = Xbox 式(A 在南) → 印刷 X 在西
+  #              true  = 任天堂式(A 在东) → 印刷 X 在北
+  #   sequential=0 = 「同时按住」而非「依序按下」(flycast ButtonCombo::sequential)。
+  #   缺任一颗就跳过该组, 避免产生无效 combo。
+  #   ⚠️ flycast 原生没有 FPS 显示切换的可绑定动作, 这项无法比照 RA 做到。
+  if [[ -n "${NUM_HOTKEY}" ]]; then
+    echo -e "
+[combo]" >> "${CONFIG}"
     local B_COUNT_C=0
-    [[ -n "${NUM_START}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_START}:btn_escape:0" >> "${CONFIG}"
-    [[ -n "${NUM_R1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_R1}:btn_quick_save:0" >> "${CONFIG}"
-    [[ -n "${NUM_L1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_SELECT},${NUM_L1}:btn_jump_state:0" >> "${CONFIG}"
-    # NOTE(w2xg2022 2026-08-02 第二版): ★呼出选单的组合键【已移除】★
-    #   实机发现:Flycast **单按 SELECT 就会开主选单**(上面 [digital] 里
-    #   [back]="btn_menu" 那条),所以 SELECT+X 这个组合完全多余 ——
-    #   两条都指向 btn_menu, 留着只是多一条会互相干扰的绑定。
-    #   连带地,这里也不再需要 InvertButtons 那套「印刷 X 在哪」的判断:
-    #   选单键是**热键本身**, 不是脸键, 没有印刷歧义。
-    #   (PSP 那边不同 —— PPSSPP 没有「单键开选单」, 必须用 SELECT+X 和弦,
-    #    所以 ppsspp.sh 里的 InvertButtons 判断要留着, 别一起删。)
+    [[ -n "${NUM_START}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_START}:btn_escape:0" >> "${CONFIG}"
+    [[ -n "${NUM_R1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_R1}:btn_quick_save:0" >> "${CONFIG}"
+    [[ -n "${NUM_L1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_L1}:btn_jump_state:0" >> "${CONFIG}"
+
+    local ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
+    local NUM_MENUKEY="${NUM_WESTX}"
+    if grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null; then
+        [[ -n "${NUM_NORTHY}" ]] && NUM_MENUKEY="${NUM_NORTHY}"
+    fi
+    [[ -n "${NUM_MENUKEY}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_MENUKEY}:btn_menu:0" >> "${CONFIG}"
   fi
 
   echo -e "\n[emulator]" >> "${CONFIG}"
-  echo "mapping_name = ${JOY_NAME}" >> "${CONFIG}"
+  echo "mapping_name = ${GC_NAME}" >> "${CONFIG}"
   echo "version = 4" >> "${CONFIG}"
   echo "rumble_power = ${RUMBLE}" >> "${CONFIG}"
 
