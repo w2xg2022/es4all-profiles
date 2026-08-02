@@ -247,20 +247,27 @@ if [ -f "${CONTROLS_INI}" ]; then
 			sed -i "/^Circle = /s/10-[0-9]*/${NK_EAST}/"    "${CONTROLS_INI}"
 			sed -i "/^Square = /s/10-[0-9]*/${NK_WEST}/"    "${CONTROLS_INI}"
 			sed -i "/^Triangle = /s/10-[0-9]*/${NK_NORTH}/" "${CONTROLS_INI}"
-			# ★选单和弦的第二颗【不要】跟着换成「真实的西」—— 曾这么改, 是错的★
-			#   一度把 MENU_KEY 设成 NK_WEST, 想让选单键「按位置」。实机对照组打脸:
-			#       RA  input_menu_toggle_btn = 3
-			#       DC  bind = 热键,3:btn_menu
-			#       PSP 改成 NK_WEST 后 = 实体 2   ← 唯一不一致的变成 PSP
-			#   原因: RA 与 flycast 的选单键都取自 **db 的 "x"**(RA 自己的 autoconfig、
-			#   flycast 走 GC_ARRAY), 而 PSP 的 10-191 也正是 SDL 的 x —— 三边同源。
-			#   db 是按位置写还是按字母写都无所谓, **三边会一起偏**, 永远指同一颗实体键。
-			#   反而是「自己算真实位置」会让 PSP 单独走开。
-			#   → 选单键保持 10-191(见上方 MENU_KEY 定义), 一致性优先于绝对位置。
-			#   (面键不同: 它决定游戏内手感, 必须是真实位置, 没有「三边一致」可言。)
+			# ★选单和弦的第二颗 = 【印刷 X】(用户裁定:面键屈就位置, 组合键按印刷)★
+			#   取 ES 的 x 条目(印刷 X 的实体编号)再转成 NKCODE, 与 flycast 同一套规则。
+			#   曾一度改成「真实的西」(NK_WEST), 那是错的 —— 已撤回:
+			#   「西」是位置, 「印着 X 的那颗」是印刷, 在任天堂式手柄上不是同一颗。
+			#   读不到就保留上方的预设 10-191(= SDL x), 行为与改动前相同。
 			echo "PSP face buttons by position: X(south)=${NK_SOUTH} O(east)=${NK_EAST} [](west)=${NK_WEST} /\\(north)=${NK_NORTH}"
 		else
 			echo "PSP face buttons: 位置资讯不完整, 维持模板原样(未重排)"
+		fi
+
+		# ★选单和弦的第二颗 = 【印刷 X】(用户裁定:面键屈就位置, 组合键按印刷)★
+		#   与面键重排**互相独立**(所以放在上面那个 if 外面):
+		#   面键要「四颗齐全」才敢动, 但「印着 X 的是哪一颗」单独一颗就问得到。
+		#   曾一度把它改成「真实的西」(NK_WEST), 那是错的 —— 已撤回:
+		#   「西」是位置, 「印着 X 的那颗」是印刷, 在任天堂式手柄上不是同一颗。
+		#   与 flycast 同一套规则(那边取 ES 的 x 实体编号, 这边多一步转 NKCODE)。
+		#   读不到就保留上方预设 10-191(= SDL x), 行为与改动前相同。
+		NK_PRINT_X=$(nkcode_of_phys "$(es_input_btn x)")
+		if [ -n "${NK_PRINT_X}" ]; then
+			MENU_KEY="${NK_PRINT_X}"
+			echo "PSP menu key = printed X -> ${MENU_KEY}"
 		fi
 	fi
 

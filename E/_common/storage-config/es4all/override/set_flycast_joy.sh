@@ -79,19 +79,18 @@ declare -A FLYCAST_D_BUTTONS=(
 #     RA  : 有选单专用开关 menu_swap_ok_cancel_buttons(=false), 确认已是物理南=印刷 A。
 #     PSP : 与 DC 同样「选单吃游戏键」, 但 PPSSPP 用「✕」当确认, ✕ 本来就在南 = 印刷 A,
 #           碰巧一致 —— DC 是唯一「原厂 A 不在南」的主机, 所以只有它会撞。
-EE_INVERT_AB="true"
-EE_INVERT_XY="false"
-
-if [[ "${EE_INVERT_AB}" == "true" ]]; then
-  # AB位置对齐：物理南(a)→DC B、物理东(b)→DC A
-  FLYCAST_D_BUTTONS[a]="btn_b"
-  FLYCAST_D_BUTTONS[b]="btn_a"
-fi
-if [[ "${EE_INVERT_XY}" == "true" ]]; then
-  # XY位置对齐：物理西(x)→DC Y、物理北(y)→DC X
-  FLYCAST_D_BUTTONS[x]="btn_y"
-  FLYCAST_D_BUTTONS[y]="btn_x"
-fi
+# ★2026-08-02 定案:EE_INVERT_AB / EE_INVERT_XY 两个开关【已移除】★
+#   它们存在的理由是修补「db 语意 vs 真实位置」的偏差, 而现在改成**直接用真实位置**
+#   (见下方 set_pad 里的 P_SOUTH/P_EAST/P_WEST/P_NORTH), 就不需要任何翻转了。
+#
+#   ⚠️ 顺带更正一个长期的错误认知: 曾以为「Dreamcast 原厂 A 在东」, **不对**。
+#      Dreamcast 的面键佈局与 Xbox 相同:
+#          上(北)=Y   下(南)=A   左(西)=X   右(东)=B
+#      所以位置对齐就是**不翻转**。旧的 EE_INVERT_AB="true" 自称位置对齐, 其实是反的;
+#      它在「db 按字母写」的山寨手柄上刚好被抵消回来(两个错凑成一个对),
+#      换一支 db 正确的手柄就会露馅 —— 实机两支手柄分别验证过两种情形。
+#
+#   下面这张表因此回归**恒等对应**, 真正决定按哪颗的是位置(在 set_pad 里覆盖编号)。
 
 declare -A STICK_DIRECTIONS=(
   [axis_x,neg]="btn_analog_left"  [axis_x,pos]="btn_analog_right"
@@ -166,6 +165,36 @@ set_pad() {
   local ES_SELECT="$(es_input_btn select)"
   local ES_START="$(es_input_btn start)"
   echo "es4all: from ES -> select=${ES_SELECT:-(无)} start=${ES_START:-(无)}"
+
+  # ★面键:从 ES 反推【真实位置】, 不能拿 gamecontrollerdb 的语意名当位置用★
+  #   SDL 的 a/b/x/y 按定义是位置(a=南 b=东 x=西 y=北), 但那要 db 条目**真的按位置写**
+  #   才成立。山寨手柄的条目常常是**按字母写的**(实机 GUID ...72050000:
+  #   db 写 a:b1, 而实体 1 其实在东 —— 它指的是「印着 A 的那颗」)。
+  #   真实位置只有 ES 知道: 印刷字母->实体编号(键位精灵) + 印刷佈局(InvertButtons)。
+  #     InvertButtons=false(Xbox 式, A 在南): 南=a 东=b 西=x 北=y
+  #     InvertButtons=true (任天堂式, A 在东): 南=b 东=a 西=y 北=x
+  #   四颗齐全才启用(POS_OK), 少一颗就整组退回 db 语意, 不产半套。
+  local ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
+  local P_SOUTH P_EAST P_WEST P_NORTH POS_OK=0
+  if grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null; then
+      P_SOUTH="$(es_input_btn b)"; P_EAST="$(es_input_btn a)"
+      P_WEST="$(es_input_btn y)";  P_NORTH="$(es_input_btn x)"
+  else
+      P_SOUTH="$(es_input_btn a)"; P_EAST="$(es_input_btn b)"
+      P_WEST="$(es_input_btn x)";  P_NORTH="$(es_input_btn y)"
+  fi
+  if [[ -n "${P_SOUTH}" && -n "${P_EAST}" && -n "${P_WEST}" && -n "${P_NORTH}" ]]; then
+      POS_OK=1
+      echo "es4all: face by position -> S=${P_SOUTH} E=${P_EAST} W=${P_WEST} N=${P_NORTH}"
+  else
+      echo "es4all: 位置资讯不完整, 面键退回 gamecontrollerdb 语意"
+  fi
+
+  # ★组合键的第二颗按【印刷】—— 用户裁定★
+  #   面键只能屈就游戏内(位置), 但组合键没有这个包袱, 按印刷对使用者最直觉:
+  #   「热键 + 印着 X 的那颗」在任何手柄上讲的都是同一句话。
+  #   直接取 ES 的 x(= 印刷 X 的实体编号), 不经过 db, 也不自己算位置。
+  local ES_PRINT_X="$(es_input_btn x)"
 
   # Vars to dinamically set triggers
   local L_TR_AXIS=""
@@ -265,6 +294,16 @@ set_pad() {
           # 就该是 Start, 不能还照 gamecontrollerdb 的惯例绑到另一颗。
           [[ "${KEY}" == "start" && -n "${ES_START}" ]] && FINAL_NUM="${ES_START}"
 
+          # 面键按真实位置覆盖编号。DC 佈局与 Xbox 相同: 南=A 东=B 西=X 北=Y。
+          if [[ "${POS_OK}" == "1" ]]; then
+              case "${ACTION}" in
+                  btn_a) FINAL_NUM="${P_SOUTH}" ;;
+                  btn_b) FINAL_NUM="${P_EAST}"  ;;
+                  btn_x) FINAL_NUM="${P_WEST}"  ;;
+                  btn_y) FINAL_NUM="${P_NORTH}" ;;
+              esac
+          fi
+
           echo "bind$((B_COUNT_D++)) = ${FINAL_NUM}:${ACTION}" >> "${CONFIG_TMP_D}"
       fi
 
@@ -338,16 +377,10 @@ set_pad() {
     [[ -n "${NUM_R1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_R1}:btn_quick_save:0" >> "${CONFIG}"
     [[ -n "${NUM_L1}" ]]    && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_L1}:btn_jump_state:0" >> "${CONFIG}"
 
-    # ★2026-08-02:选单键改成【按位置】(一律西), 不再看印刷 InvertButtons★
-    #   原本按印刷找「印着 X 的那颗」, 实机第二支手柄(任天堂式印刷)上炸掉:
-    #   算出北键, 而 RA 的 input_menu_toggle_btn 是**西**(RA 自己就按位置) ->
-    #   同一台机器上 RA 与 DC/PSP 要按不同颗, 使用者只会觉得「DC 叫不出选单」。
-    #
-    #   改按位置后:①三边(RA / DC / PSP)一律是西那颗, 心智模型统一;
-    #             ②不再依赖佈局侦测, 侦测错了也不影响选单叫不叫得出来;
-    #             ③本脚本对 ES 的依赖收敛成**只剩 SELECT / START / 热键**三颗系统键。
-    #   代价:任天堂式印刷的手柄上, 那颗印的是 Y 不是 X —— 但 RA 本来就是这样, 一致。
-    local NUM_MENUKEY="${NUM_WESTX}"
+    # ★选单和弦的第二颗 = 【印刷 X】(用户裁定:面键屈就位置, 组合键按印刷)★
+    #   取 ES 的 x 条目(印刷 X 的实体编号), 不经 db、也不自己算位置。
+    #   读不到才退回 db 的 x(NUM_WESTX)。
+    local NUM_MENUKEY="${ES_PRINT_X:-${NUM_WESTX}}"
     [[ -n "${NUM_MENUKEY}" ]] && echo "bind$((B_COUNT_C++)) = ${NUM_HOTKEY},${NUM_MENUKEY}:btn_menu:0" >> "${CONFIG}"
   fi
 
