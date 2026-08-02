@@ -236,11 +236,31 @@ set_pad() {
   #   ★按【装置名】比对, 不能按 GUID★: SDL 2.26+ 在 GUID 里塞了 CRC-16,
   #   执行期取到 030081b85e04...、ES 记的是 030000005e04..., 按 GUID 必然【静默】落空。
   local ES_INPUT="/storage/.config/emulationstation/es_input.cfg"
+  # ★2026-08-02 真因:查 es_input.cfg 必须按【GUID(剥掉 CRC)】, 不能按名字★
+  #   这台机器上同一支手柄有**三个不同的名字**:
+  #       UDEV 名(joy_common 传进来的 ${4}) : "Microsoft X-Box 360 pad"
+  #       SDL_JoystickName(gamepad_info)    : "X360 Controller"
+  #       gamecontrollerdb 映射名 = ES 写进 es_input.cfg 的 deviceName
+  #                                         : "Xbox 360 Controller"
+  #   原本用 JOY_NAME(UDEV 名)查, **永远命中不了** —— 而保底值 NUM_SELECT 刚好也是 6,
+  #   与 ES 的 hotkeyenable=6 撞成同值, 所以输出看起来完全正确, 从外部分辨不出来。
+  #   ★验证陷阱:别用「产出的 [combo] 是不是 6」判断透传有没有生效, 要看有没有印出
+  #     下面那行 log; 或把 ES 的热键改成别的键再看有没有跟着变。★
+  #
+  #   改用 GUID 比对, 与名字完全脱钩:
+  #     执行期 GUID(SDL 2.26+ 带装置名的 CRC-16): 030081b8 5e0400008e02000010010000
+  #     ES 档里的                                : 03000000 5e0400008e02000010010000
+  #   两者只差第 5~8 个字元那段 CRC —— ES 自己在 rebuildAllJoysticks() 也是把这段抹成
+  #   0 再比对, 这里照做, 两种写法都试。
   local NUM_HOTKEY="${NUM_SELECT}"
-  if [[ -f "${ES_INPUT}" && -n "${JOY_NAME:-}" ]]; then
+  local ES_GUID="${3}"
+  local ES_GUID_NOCRC=""
+  [[ ${#ES_GUID} -ge 8 ]] && ES_GUID_NOCRC="${ES_GUID:0:4}0000${ES_GUID:8}"
+  if [[ -f "${ES_INPUT}" && -n "${ES_GUID}" ]]; then
       local HK
-      HK=$(awk -v nm="deviceName=\"${JOY_NAME}\"" '
-          index($0, nm) { inblock=1 }
+      HK=$(awk -v g1="deviceGUID=\"${ES_GUID}\"" \
+               -v g2="deviceGUID=\"${ES_GUID_NOCRC}\"" '
+          index($0, g1) || index($0, g2) { inblock=1 }
           inblock && /name="hotkeyenable"/ && /type="button"/ {
               if (match($0, /id="[0-9]+"/)) { print substr($0, RSTART+4, RLENGTH-5); exit }
           }
@@ -248,7 +268,9 @@ set_pad() {
       ' "${ES_INPUT}")
       if [[ -n "${HK}" ]]; then
           NUM_HOTKEY="${HK}"
-          echo "es4all: hotkey from ES = button ${HK}"
+          echo "es4all: hotkey from ES = button ${HK} (guid ${ES_GUID_NOCRC})"
+      else
+          echo "es4all: hotkey NOT found in es_input.cfg for guid ${ES_GUID_NOCRC}, fallback to select=${NUM_SELECT}"
       fi
   fi
 

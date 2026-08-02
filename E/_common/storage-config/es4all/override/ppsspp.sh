@@ -98,13 +98,24 @@ if [ -f "${CONTROLS_INI}" ]; then
 	#   改那边记得两边一起改。
 	#   ⚠️ 四组和弦(退出/存档/读档/选单)的修饰键**必须一起跟着变**,
 	#      只改选单那组会变成「选单用新热键、其余三组还用旧的」。
-	#   ★按【装置名】查 es_input.cfg, 不能按 GUID★:SDL 2.26+ 的 GUID 带 CRC-16,
-	#     ES 记的与执行期取到的不是同一串, 按 GUID 比对必然静默落空。
+	#   ★2026-08-02 修正:改按【GUID(剥掉 CRC)】查, 不能按装置名★
+	#     旧写法用 /sys/class/input/js0/device/name(= UDEV 名 "Microsoft X-Box 360 pad"),
+	#     但 ES 写进 es_input.cfg 的 deviceName 是 **gamecontrollerdb 映射名**
+	#     ("Xbox 360 Controller") —— 同一支手柄三个名字(还有 SDL_JoystickName
+	#     "X360 Controller"), 用 UDEV 名查**永远落空**。
+	#     ★之所以一直没被发现★:保底值刚好是 10-196(SELECT), 而这支手柄的
+	#       hotkeyenable 也正好是 6(SELECT), 输出与「透传成功」逐字节相同。
+	#       验证要看有没有印出 "PSP HOTKEY from ES", 别看结果值。
+	#     GUID 比对:执行期带 CRC-16(030081b8...), ES 档里是 03000000...,
+	#     只差第 5~8 字元 —— ES 自己也是抹掉那段再比, 这里两种写法都试。
 	HOTKEY="10-196"                       # 落不到时的保底 = SELECT(与改动前同值)
-	PAD_NAME="$(cat /sys/class/input/js0/device/name 2>/dev/null)"
-	if [ -n "${PAD_NAME}" ] && [ -f "${ES_SETTINGS%es_settings.cfg}es_input.cfg" ]; then
-		HK_ID=$(awk -v nm="deviceName=\"${PAD_NAME}\"" '
-			index($0, nm) { inblock=1 }
+	PAD_GUID="$(gamepad_info -more 2>/dev/null | awk '/SDL GUID:/{print $3; exit}')"
+	PAD_GUID_NOCRC=""
+	[ ${#PAD_GUID} -ge 8 ] && PAD_GUID_NOCRC="$(echo "${PAD_GUID}" | cut -c1-4)0000$(echo "${PAD_GUID}" | cut -c9-)"
+	if [ -n "${PAD_GUID}" ] && [ -f "${ES_SETTINGS%es_settings.cfg}es_input.cfg" ]; then
+		HK_ID=$(awk -v g1="deviceGUID=\"${PAD_GUID}\"" \
+		            -v g2="deviceGUID=\"${PAD_GUID_NOCRC}\"" '
+			index($0, g1) || index($0, g2) { inblock=1 }
 			inblock && /name="hotkeyenable"/ && /type="button"/ {
 				if (match($0, /id="[0-9]+"/)) { print substr($0, RSTART+4, RLENGTH-5); exit }
 			}
