@@ -1,0 +1,26 @@
+# es4all: 开机把自己编的 ES 与 /usr/bin 覆盖档 bind-mount 上去。(ROCKNIX 版)
+#
+# 与 emuelec 那份的差别只有【顺序目标】——两边的 ES 服务不同名:
+#   emuelec : emustation.service
+#   rocknix : essway.service (ES 跑在 sway 里, 见 dist/rocknix/system.d/essway.service)
+# ★必须在 ES 【之前】完成★ —— ES 一旦起来就来不及换它自己的档案。
+#
+# WantedBy 同理: ROCKNIX 的开机目标是 rocknix.target, 写成 emuelec.target 会
+# **静默不启用**(systemd 不会报错, 只是没有人 want 它) —— 那正是本服务失效时
+# 最难查的样子: 档案都在、内容都对, 就是没跑。
+#
+# 放在 /storage/.config/system.d(systemd 的 UnitPath 之一, 可写且持久),
+# 所以整包可由 es4all-profiles 下发, 不必动只读的 /usr。
+[Unit]
+Description=es4all self-mount (ES binary and /usr/bin overrides)
+Before=essway.service
+After=sysinit.target
+RequiresMountsFor=/storage
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/storage/.config/es4all/bin/selfmount.sh
+
+[Install]
+WantedBy=rocknix.target

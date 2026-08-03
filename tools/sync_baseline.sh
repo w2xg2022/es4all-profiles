@@ -26,7 +26,13 @@ CHECK=0
 [ "${1:-}" = "--check" ] && CHECK=1
 
 # 对照表: <本仓库路径>|<es4all 仓库内路径>
-MAP='emuelec/_common/storage-config/emulationstation/scripts/configscripts/retroarch.sh|dist/emuelec/config/scripts/configscripts/retroarch.sh'
+#
+# 后两条不是「首刷就必须有」那类, 而是**这两支原本住在 es4all**、现在正本搬来了 ——
+# 留着对照是为了让 es4all 那份不会被人当成可以各自修改的复本(改了没人会发现)。
+# 哪天确定固件不必带, 从这张表移除并删掉 dist 那份即可。
+MAP='emuelec/_common/storage-config/emulationstation/scripts/configscripts/retroarch.sh|dist/emuelec/config/scripts/configscripts/retroarch.sh
+rocknix/_common/bin/setaudio.sh|dist/rocknix/sources/es4all-setauddev
+rocknix/_common/bin/installtoemmc.sh|dist/rocknix/sources/installtoemmc'
 
 if [ ! -d "${ES4ALL}" ]; then
 	# 不在同一台机器上也要能跑 —— 本脚本是辅助，不是必要条件。

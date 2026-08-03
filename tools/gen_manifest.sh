@@ -37,21 +37,29 @@ files=$(find common armbian emuelec rocknix -type f 2>/dev/null | sed 's|^\./||'
 # 与其为此加一层组合 scope(下次可能又是别的组合)，不如让工具挡住会实际发生的事：
 # 忘记同步。同名不同内容就警告，同名同内容视为刻意的复制、只在冗长模式提示。
 #
-# ★只比对 <target>/_common/ 这一层★: 那里放的是【机制】(怎么做)，跨 target 常常
-# 是同一支脚本的复本(例: selfmount.sh 在 emuelec 与 rocknix 位元组相同)。
-# 机型资料档不在比对范围 —— audio_outputs.cfg 每台本来就不同，那是设计不是漂移，
-# 拿 basename 全域比会淹没在噪音里，噪音多的检查等於没有检查。
-printf '%s\n' "${files}" | while IFS= read -r f; do
-	[ -n "$f" ] || continue
-	case $f in */_common/*) ;; *) continue ;; esac
-	rel=${f#*/_common/}
-	printf '%s\t%s\t%s\n' "$rel" "$(md5sum "$f" | cut -d' ' -f1)" "$f"
-done | sort | awk -F'\t' '
-	{ rel = $1; md5 = $2; path = $3
-	  if (rel == prevrel && md5 != prevmd5)
-	      printf "⚠️  跨 target 的同名机制档内容不同(忘了同步?): %s <-> %s\n", prevpath, path > "/dev/stderr"
-	  prevrel = rel; prevmd5 = md5; prevpath = path }
-'
+# ★只比对【明确声明应该一致】的那几支★(SHARED_SAME)。
+#
+# 一开始写成「所有 <target>/_common/ 底下同名档都比」，那是错的前提:
+# 三边同名不同内容【本来就是设计】—— setaudio.sh(裸 ALSA vs PipeWire vs ~/.asoundrc)、
+# installtoemmc.sh(两套分区逻辑)、selfmount unit(essway vs emustation)全都必须不同。
+# 那样一跑就是四条误报, 而噪音多的检查等於没有检查, 下次真漂移了也不会有人看。
+#
+# 所以改成白名单: 只有「刻意维持位元组相同」的复本才在这里盯。
+# 目前只有 selfmount.sh(emuelec 与 rocknix 共用同一支实作)。
+SHARED_SAME='bin/selfmount.sh'
+
+for rel in ${SHARED_SAME}; do
+	printf '%s\n' "${files}" | while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		case $f in */_common/"${rel}") ;; *) continue ;; esac
+		printf '%s\t%s\n' "$(md5sum "$f" | cut -d' ' -f1)" "$f"
+	done | sort | awk -F'\t' -v rel="${rel}" '
+		{ md5 = $1; path = $2
+		  if (NR > 1 && md5 != prevmd5)
+		      printf "⚠️  应该一致的档内容不同(忘了同步?): %s <-> %s\n", prevpath, path > "/dev/stderr"
+		  prevmd5 = md5; prevpath = path }
+	'
+done
 
 {
 	printf '{\n'

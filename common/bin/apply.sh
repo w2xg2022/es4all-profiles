@@ -24,13 +24,73 @@ set +u
 [ -f /etc/profile ] && . /etc/profile
 set -u
 
-STAMP_DIR=/storage/.config/es4all
-DATA_DIR=/storage/.config/es4all          # 机型资料(<T>/<机型>/storage-config/es4all/) 的落点
-OVERRIDE_DIR=/storage/.config/es4all/override   # /usr/bin 覆盖档(由 selfmount.sh bind-mount)
-ES_CONFIG_DIR=/storage/.config/emulationstation # ES 的使用者设定目录(scripts/ 钩子在这底下)
-PPINI=/storage/.config/ppsspp/PSP/SYSTEM/ppsspp.ini
+# ---------------------------------------------------------------------------
+# 三边差异: 只有几个路径不同, 在这里一次吸收
+# ---------------------------------------------------------------------------
+# ★2026-08-03 本档提升到 common/, 三个发行版共用同一支★
+#   原本只有 emuelec 有, 结果 rocknix / armbian【什么一次性设定都不会跑】——
+#   PSP/DC 预设没套、selfmount 服务没人 enable、钩子的执行位没人补。
+#   而 ES 呼叫的是 target 无关的 scriptPath("apply.sh"), 少了它就整段静默不执行。
+#
+# ★判据用「设定档在哪」而不是猜发行版名★: 那个档的位置就是 ES 自己(Paths.cpp)
+#   认定的 config store, 与 ES 同源; 拿 /etc/os-release 去猜等於多养一套真相。
+if [ -f /storage/.config/system/configs/system.cfg ]; then
+	TARGET=rocknix
+	SYS_CONF=/storage/.config/system/configs/system.cfg
+	ROOT_CFG=/storage/.config
+elif [ -d /storage/.config/emuelec ]; then
+	TARGET=emuelec
+	SYS_CONF=/storage/.config/emuelec/configs/emuelec.conf
+	ROOT_CFG=/storage/.config
+else
+	TARGET=armbian
+	ROOT_CFG="${HOME:-/storage}/.config"
+	SYS_CONF="${HOME:-/storage}/.emulationstation/system.conf"
+fi
+
+# ★独立模拟器的【名字】三边不一样, 而且 emulator 与 core 两个键还可能不同值★
+#   emuelec : psp.emulator=PPSSPPSDL   psp.core=PPSSPPSDL
+#   rocknix : psp.emulator=ppsspp      psp.core=ppsspp-sa   (两个键不同值!)
+#   armbian : 没有独立 PPSSPP, 走 libretro -> 不设这两个键
+#   值取自各自 es_systems.cfg 的 <emulator name=…>/<core>。写错的表现是
+#   「选单显示 A、实际跑 B」或干脆开不了, 而且**不会报错**。
+case "${TARGET}" in
+	rocknix)
+		PSP_EMULATOR=ppsspp;    PSP_CORE=ppsspp-sa
+		DC_EMULATOR=flycast;    DC_CORE=flycast-sa
+		;;
+	emuelec)
+		PSP_EMULATOR=PPSSPPSDL; PSP_CORE=PPSSPPSDL
+		DC_EMULATOR=flycastsa;  DC_CORE=flycastsa
+		;;
+	*)
+		PSP_EMULATOR=""; PSP_CORE=""
+		DC_EMULATOR=""; DC_CORE=""
+		;;
+esac
+
+STAMP_DIR="${ROOT_CFG}/es4all"
+DATA_DIR="${ROOT_CFG}/es4all"                 # 机型资料的落点
+OVERRIDE_DIR="${ROOT_CFG}/es4all/override"    # /usr/bin 覆盖档(由 selfmount.sh bind-mount)
+ES_CONFIG_DIR="${ROOT_CFG}/emulationstation"  # ES 的使用者设定目录(scripts/ 钩子在这底下)
+PPINI="${ROOT_CFG}/ppsspp/PSP/SYSTEM/ppsspp.ini"
 
 mkdir -p "${STAMP_DIR}"
+
+# 写一个 key 到 ES 的 config store。等价於 EmuELEC 的 set_ee_setting, 但三边都成立。
+# ★为什么不用 set_ee_setting★: 那是 EmuELEC /etc/profile 里的 shell 函式,
+# rocknix / armbian 根本没有 —— 用它等於那两边永远静默跳过(而且标记档照建, 看起来像做了)。
+conf_set() {
+	local key="$1" val="$2"
+	[ -n "${SYS_CONF}" ] || return 0
+	mkdir -p "$(dirname "${SYS_CONF}")"
+	[ -f "${SYS_CONF}" ] || : > "${SYS_CONF}"
+	if grep -q "^${key}=" "${SYS_CONF}" 2>/dev/null; then
+		sed -i "s|^${key}=.*|${key}=${val}|" "${SYS_CONF}"
+	else
+		echo "${key}=${val}" >> "${SYS_CONF}"
+	fi
+}
 
 # ---------------------------------------------------------------------------
 # PSP 预设: 独立模拟器 + 画面后端 + 内部分辨率
@@ -74,9 +134,11 @@ psp_defaults() {
 	# ① 预设用【独立】PPSSPP 而不是 libretro 核心。
 	#    psp.core / psp.emulator 优先于 es_systems.cfg 的默认值(两个键都要设,
 	#    ES 的选单与实际启动路径分别读它们)。
-	if command -v set_ee_setting >/dev/null 2>&1; then
-		set_ee_setting psp.core PPSSPPSDL
-		set_ee_setting psp.emulator PPSSPPSDL
+	#    armbian 没有独立 PPSSPP(走 libretro), 那边 PSP_CORE 是空的 -> 不写这两个键。
+	#    ★不能写空值★: 写了 psp.core= 会让 ES 认为使用者选了「空」的模拟器。
+	if [ -n "${PSP_CORE}" ]; then
+		conf_set psp.core "${PSP_CORE}"
+		conf_set psp.emulator "${PSP_EMULATOR}"
 	fi
 
 	# ② 后端与分辨率写进 ppsspp.ini。
@@ -181,10 +243,10 @@ dc_defaults() {
 	local stamp="${STAMP_DIR}/.dc-defaults-applied"
 	[ -f "${stamp}" ] && return 0
 
-	if command -v set_ee_setting >/dev/null 2>&1; then
-		set_ee_setting dreamcast.core flycastsa
-		set_ee_setting dreamcast.emulator flycastsa
-	fi
+	# 名字见档首的 per-target 表(emuelec=flycastsa, rocknix=flycast/flycast-sa)。
+	[ -n "${DC_CORE}" ] || return 0
+	conf_set dreamcast.core "${DC_CORE}"
+	conf_set dreamcast.emulator "${DC_EMULATOR}"
 
 	touch "${stamp}"
 }

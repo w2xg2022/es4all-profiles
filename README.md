@@ -55,6 +55,19 @@ ES4All（armbian / emuelec / rocknix 三个 target）在**运行期**下发的�
 > 为什么不是三个仓库：三边大部分内容相同，拆开必然漂移。
 > 真正的差异只有【落点路径】和【消费脚本】，用 scope 覆盖表达就够。
 
+### `common/` 放什么（2026-08-03 起真的有东西了）
+
+| 档 | 为什么在 common |
+|---|---|
+| `bin/apply.sh` | ES 呼叫的是 target 无关的 `scriptPath("apply.sh")`。原本只有 emuelec 有，结果 rocknix / armbian **什么一次性设定都不会跑**（PSP/DC 预设没套、selfmount 没人 enable、钩子执行位没人补）。三边差异只有几个路径，脚本内 detect 掉即可 |
+| `bin/es-input-to-retroarch.py` | rocknix / armbian 没有 EmuELEC 那套 configscripts，用它把 `es_input.cfg` 直接转成 RA autoconfig |
+| `storage-config/…/controls-changed/10-inputconfig.sh` | 翻译**工具**三边不同，但「什么时候翻译」是同一件事，不该各写一份钩子 |
+
+⚠️ **三边同名不同内容是设计，不是漂移**：`setaudio.sh`（裸 ALSA / PipeWire / `~/.asoundrc`）、
+`installtoemmc.sh`（两套分区逻辑）、selfmount unit（`essway` vs `emustation`）都必须各写一份。
+`gen_manifest.sh` 的一致性检查因此改成**白名单**（`SHARED_SAME`），目前只盯 `bin/selfmount.sh`
+—— 那是唯一刻意维持位元组相同的复本。噪音多的检查等於没有检查。
+
 ### 共用层：真实需求是「部分 target 共用」，不是「三边共用」
 
 `common/` 一直空著，不是没人用，是**猜错了共用的维度**：当初以为会沿
