@@ -1,7 +1,7 @@
 {
   "schema": 1,
-  "version": "2026.08.03.8",
-  "min_es4all_version": "1.2",
+  "version": "2026.08.03.9",
+  "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
     { "path": "armbian/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "5fc2fa90be93a841acc775951d4ed363", "size": 2253 },
