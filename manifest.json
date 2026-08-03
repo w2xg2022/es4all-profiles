@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.03.20",
+  "version": "2026.08.03.21",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -41,6 +41,7 @@
     { "path": "rocknix/_common/storage-config/system.d/es4all-selfmount.service", "md5": "61456ff81cae5c297ee90e2ff88abacb", "size": 1097 },
     { "path": "rocknix/_common/storage/joypads/Microsoft X-Box 360 pad.cfg", "md5": "3204a1b88dc53c794e3fcf3b78735e18", "size": 1656 },
     { "path": "rocknix/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "49d8ac6d0eced8240ade309b4eec0761", "size": 1281 },
-    { "path": "rocknix/RK3566/MD1000/storage-config/es4all/emmc-layout.conf", "md5": "8e5ae8bbd53916c64d6363fc8d74bcad", "size": 1252 }
+    { "path": "rocknix/RK3566/MD1000/storage-config/es4all/emmc-layout.conf", "md5": "8e5ae8bbd53916c64d6363fc8d74bcad", "size": 1252 },
+    { "path": "rocknix/RK3566/MD1000/storage-config/es4all/psp-defaults.conf", "md5": "b69f27f07fd738f094b091431355af9f", "size": 1115 }
   ]
 }
