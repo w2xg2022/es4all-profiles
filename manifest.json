@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.03.10",
+  "version": "2026.08.03.11",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -20,7 +20,7 @@
     { "path": "emuelec/_common/storage-config/es4all/override/ppsspp.sh", "md5": "dade7ee7be026ad86a71efda26e8551c", "size": 17775 },
     { "path": "emuelec/_common/storage-config/es4all/override/set_flycast_joy.sh", "md5": "dd1e5486a4d5f9d520899d7d6218a6fc", "size": 22296 },
     { "path": "emuelec/_common/storage-config/es4all/override/set_ppsspp_joy.sh", "md5": "eee9d12143d8e88ec57dfd3be2cfe657", "size": 7070 },
-    { "path": "emuelec/_common/storage-config/es4all/override/setsettings.sh", "md5": "177d32efcc2ccdeb077121e119f459b4", "size": 31118 },
+    { "path": "emuelec/_common/storage-config/es4all/override/setsettings.sh", "md5": "460edd5db77da39ac4ee27cd6617ba2f", "size": 32387 },
     { "path": "emuelec/_common/storage-config/system.d/es4all-selfmount.service", "md5": "7540ea1767cc77b2c6da971220a68965", "size": 895 },
     { "path": "emuelec/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "fa35d836aef063b0b24ee283d59b5c56", "size": 2039 },
     { "path": "emuelec/RK3566/MD1000/storage-config/es4all/emmc-layout.conf", "md5": "d7e6c352e2637628b0d85f8459a7e483", "size": 1838 },

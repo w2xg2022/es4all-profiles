@@ -629,9 +629,30 @@ else
     ${TBASH} bezels.sh "${PLATFORM}" "${ROM}" "${ISBEZEL}" "${IRBEZEL}"
 fi
 
+# NOTE(w2xg2022 2026-08-03): ★这里要取【反】, 原本直接等於 InvertButtons 是错的★
+#
+# RA 选单的确认键 = (autoconfig 把 RetroPad A 绑到哪一颗) × (swap)。
+# 自从面键改成【方位对齐】(configscripts/retroarch.sh), RetroPad A **恒等於东那颗**,
+# 於是要让「确认 = 印刷 A」就变成:
+#     任天堂式(InvertButtons=true , 印刷A在东) -> 确认落 RetroPad A -> swap=false
+#     Xbox 式 (InvertButtons=false, 印刷A在南) -> 确认落 RetroPad B -> swap=true
+#   => swap = !InvertButtons
+#
+# ★原本 swap=InvertButtons 为什么长期没被发现★: 旧的 autoconfig 是标签对齐
+# (RetroPad A 恒等於印刷 A), 那时的正确解是「永远不 swap」——
+# 而 Xbox 式手柄的 InvertButtons 刚好是 false, 於是**碰巧对**;
+# 任天堂式手柄(true)则一直是错的(确认落在印刷 B)。市面上绝大多数是 Xbox 式,
+# 所以这个错被遮了很久, 直到拿一支印刷 A 在东的手柄测才照出来。
+#
+# ⚠️ 这两件事是**相依**的: 改了 autoconfig 的语意就必须同时改这里,
+# 只改一个就是「一半对一半错」。
 inverted_ok_cancel=$(get_es_setting bool InvertButtons)
-[[ ${inverted_ok_cancel} == "true" ]] || inverted_ok_cancel="false"
-echo "menu_swap_ok_cancel_buttons = \"${inverted_ok_cancel}\"" >> ${RACONF}
+if [[ "${inverted_ok_cancel}" == "true" ]]; then
+    menu_swap="false"   # 任天堂式: 印刷A在东 = RetroPad A, 不换
+else
+    menu_swap="true"    # Xbox 式: 印刷A在南 = RetroPad B, 要换
+fi
+echo "menu_swap_ok_cancel_buttons = \"${menu_swap}\"" >> ${RACONF}
 
 # NOTE(w2xg2022): InvertGameButtons ES設定(跟InvertButtons同一個設定畫面) ->
 # 動態產生/移除對應core的per-core remap，讓遊戲內A/B、X/Y對調(位置對齊，
