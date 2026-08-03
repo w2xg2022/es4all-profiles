@@ -165,14 +165,22 @@ psp_defaults() {
 # ★这项不用标记档、每次都跑★: enable 是幂等的, 而且刷新固件、换 /storage 之后
 # 这个 enable 会消失 —— 每次开机确认一遍才不会某天默默失效。
 # (失效的表现极隐蔽: ES 跑回固件自带的旧版, 版本号还很像, 会被误判成「改动没生效」。)
+# ★改成扫描, 不再写死单一服务名★(2026-08-03): profile 以後会下发不只一个 unit
+# (目前有 es4all-selfmount、es4all-storage)。写死名字的话, 新增一个 unit 就要同时改这里,
+# 而漏改的表现是「档案下发了、服务却没人 enable」—— 又一个静默失效。
 selfmount_service() {
-	[ -f /storage/.config/system.d/es4all-selfmount.service ] || return 0
+	[ -d /storage/.config/system.d ] || return 0
 	command -v systemctl >/dev/null 2>&1 || return 0
 
-	if ! systemctl is-enabled es4all-selfmount.service >/dev/null 2>&1; then
-		systemctl daemon-reload 2>/dev/null
-		systemctl enable es4all-selfmount.service >/dev/null 2>&1
-	fi
+	local u name
+	for u in /storage/.config/system.d/es4all-*.service; do
+		[ -f "${u}" ] || continue
+		name=$(basename "${u}")
+		if ! systemctl is-enabled "${name}" >/dev/null 2>&1; then
+			systemctl daemon-reload 2>/dev/null
+			systemctl enable "${name}" >/dev/null 2>&1
+		fi
+	done
 }
 
 # ---------------------------------------------------------------------------
