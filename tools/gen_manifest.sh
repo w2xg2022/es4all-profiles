@@ -24,6 +24,11 @@ else
 fi
 
 # 收录 common/ 与三个发行版目录底下的一切；排除仓库自身的元数据
+#
+# ★档名可能有空格★(例: "Microsoft X-Box 360 pad.cfg" —— RetroArch 的 autoconfig
+# 是按手柄名命名的，手柄名本来就带空格)。所以这里【一律走 while read 逐行读】，
+# 不用 `for f in $files` —— 那会按空白拆开，一个档名变四个不存在的路径，
+# 而且 find/md5sum 各自报错、manifest 里默默多出几笔垃圾。
 files=$(find common armbian emuelec rocknix -type f 2>/dev/null | sed 's|^\./||' | sort || true)
 
 # ★同名档漂移检查★(2026-08-02 加)
@@ -36,11 +41,12 @@ files=$(find common armbian emuelec rocknix -type f 2>/dev/null | sed 's|^\./||'
 # 是同一支脚本的复本(例: selfmount.sh 在 emuelec 与 rocknix 位元组相同)。
 # 机型资料档不在比对范围 —— audio_outputs.cfg 每台本来就不同，那是设计不是漂移，
 # 拿 basename 全域比会淹没在噪音里，噪音多的检查等於没有检查。
-for f in $files; do
+printf '%s\n' "${files}" | while IFS= read -r f; do
+	[ -n "$f" ] || continue
 	case $f in */_common/*) ;; *) continue ;; esac
 	rel=${f#*/_common/}
-	printf '%s %s %s\n' "$rel" "$(md5sum "$f" | cut -d' ' -f1)" "$f"
-done | sort | awk '
+	printf '%s\t%s\t%s\n' "$rel" "$(md5sum "$f" | cut -d' ' -f1)" "$f"
+done | sort | awk -F'\t' '
 	{ rel = $1; md5 = $2; path = $3
 	  if (rel == prevrel && md5 != prevmd5)
 	      printf "⚠️  跨 target 的同名机制档内容不同(忘了同步?): %s <-> %s\n", prevpath, path > "/dev/stderr"
@@ -55,7 +61,8 @@ done | sort | awk '
 	printf '  "files": [\n'
 
 	first=1
-	for f in $files; do
+	printf '%s\n' "${files}" | while IFS= read -r f; do
+		[ -n "$f" ] || continue
 		case $f in *.gitkeep) continue ;; esac
 		md5=$(md5sum "$f" | cut -d' ' -f1)
 		size=$(wc -c < "$f" | tr -d ' ')
@@ -63,7 +70,7 @@ done | sort | awk '
 		first=0
 		printf '    { "path": "%s", "md5": "%s", "size": %s }' "$f" "$md5" "$size"
 	done
-	[ $first -eq 1 ] || printf '\n'
+	printf '\n'
 
 	printf '  ]\n'
 	printf '}\n'
@@ -71,3 +78,7 @@ done | sort | awk '
 
 mv manifest.json.tmp manifest.json
 echo "manifest.json 已更新: version=$VERSION"
+
+# 顺手检查「固件 baseline」那几个双份档有没有漂移(见 sync_baseline.sh 的说明)。
+# 只警告不挡 —— 不在同一台机器上、或没 clone es4all 的人也要能跑 gen_manifest。
+sh tools/sync_baseline.sh --check || true

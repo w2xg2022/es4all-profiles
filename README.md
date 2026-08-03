@@ -143,6 +143,30 @@ bind-mount 直接换掉档案本身，不依赖任何顺序。
 ⚠️ 两支**当前与固件树位元组相同**（纯搬家，还没改行为）——这样才验得出 bind-mount
 链路本身是对的。之后的修改都在本仓库进行。
 
+### ⚠️ 档名可以有空格，但要知道它踩过什么
+
+`Microsoft X-Box 360 pad.cfg` 是第一个带空格的档（RetroArch 的 autoconfig 按手柄名
+命名，手柄名本来就带空格）。它一进来就踩爆两处，都不是会报错的那种：
+
+- `tools/gen_manifest.sh` 原本用 `for f in $files`，按空白拆开 →
+  一个档名变四个不存在的路径，manifest 里默默多出垃圾条目。已全面改成 `while read`。
+- 客户端下载 URL 要**逐段** urlencode。`HttpReq::urlEncode` 会连 `/` 一起编成 `%2F`，
+  整条丢进去会变成一个巨大的档名；不编则 GitHub raw 直接 404 →
+  「这一档失败 → 整批放弃」，而其他档看起来都好好的。
+
+### 固件 baseline：少数档两边都要有
+
+一般来说本仓库的东西固件不必带（设备自己拉）。例外是**「还没拉到 profile 的那一刻
+就必须存在」**的档，目前只有一个：
+
+| 档 | 为什么固件也要有 |
+|---|---|
+| `configscripts/retroarch.sh` | 刷完机第一次开机会**强制跑键位精灵**（刻意的保底设计），精灵存完的**当下**就要有人把 `es_input.cfg` 翻译成 RetroArch 设定 —— 而那一刻通常还没连上网 |
+
+**正本永远是本仓库，es4all 的 `dist/` 那份是产物。**
+改完跑 `./tools/sync_baseline.sh` 同步过去；`gen_manifest.sh` 会顺手 `--check` 并警告。
+两边各自维护必然漂移，而且**漂移了不会有人发现**——两份都能跑，只是行为不同。
+
 ### 键位精灵的触发钩子（controls-changed）
 
 `<target>/_common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh`
@@ -184,6 +208,12 @@ ES 的事件机制只认 `scripts/<事件名>/` 这个位置。
 | `es-resources/` | ES 用户 resources 目录 | 同左 | 同左 |
 | `storage-config/` | `~/.config/` | `/storage/.config/` | `/storage/.config/` |
 | `bin/` | `~/.config/es4all/bin/` | `/storage/.config/es4all/bin/` | 同 emuelec |
+| `storage/` | `~/` | `/storage/` | 同 emuelec |
+
+`storage/` 是**使用者资料根本身**，给不在 `.config` 底下的落点用。
+目前唯一的用户是 ROCKNIX 的 RA autoconfig 出厂档 → `/storage/joypads/`
+（那是 `/tmp/joypads` 这个 overlay 的 upper，写入即持久）。
+硬塞进 `storage-config/` 会变成 `/storage/.config/joypads`，RA 根本不看那里 —— 静默失效。
 
 `bin/` 放**可执行脚本**，客户端会自动补上执行位（`chmod 0755`）。
 与 `storage-config/` 分开是刻意的：补执行位这件事只该发生在这个落点，
