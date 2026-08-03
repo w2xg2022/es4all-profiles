@@ -87,15 +87,26 @@ function onstart_retroarch_joystick() {
     #   per-core remap 那层整个不需要(已由 override 的 setsettings.sh 移除并清理旧档)。
     #
     # ★方位从哪来★: es_input.cfg 的 a/b/x/y 是【印刷字母 → 实体按键编号】,
-    #   ES 的 InvertButtons 记的是【印刷字母在哪个方位】(布局侦测的结果, 精灵只问一次 A):
-    #     InvertButtons=true (Xbox 式)   印刷 A=南 B=东 X=西 Y=北
-    #     InvertButtons=false(任天堂式)  印刷 A=东 B=南 X=北 Y=西
+    #   ES 的 InvertButtons 记的是【印刷字母在哪个方位】(布局侦测的结果, 精灵只问一次 A)。
+    #
+    # ★★极性: true = 任天堂式(印刷 A 在东)、false = Xbox 式(印刷 A 在南)★★
+    #   这是【与系统其余部分一致】的那一套, 别自己另外推:
+    #     GuiDetectLayout                : 按到 BTN_EAST(A 在东) -> 存 true
+    #     set_flycast_joy.sh / ppsspp.sh : true -> 南=b 东=a 西=y 北=x (即 A 在东)
+    #   ⚠️ ES 内部的 InputConfig::buttonDisplayName / buttonImage 用的是**相反**的解读
+    #      (true -> 逻辑 a 显示成 SOUTH)。★那一处才是异类★, 别拿它当基准。
+    #      实机 2026-08-03 我就是照它推, 把这里写反 -> 四颗面键全歪, 而同一台的 PSP/DC
+    #      却是对的(它们照的是上面那套)。**同一个旗标被多处消费时, 基准是「多数 + 实机
+    #      验证过的那一套」, 不是最先读到的那一处。**
+    #
     #   两者一凑才得到「方位 → 实体编号」。★这是唯一可靠的来源★ ——
     #   gamecontrollerdb 对山寨手柄常按【字母】写而不是按位置, 拿它当方位用会静默错。
     ES_SETTINGS="/storage/.config/emulationstation/es_settings.cfg"
-    ES_LAYOUT_XBOX=0
+    # 需要换算的是 **Xbox 式**(印刷与 RetroPad 方位不一致), 即 InvertButtons 非 true。
+    # 任天堂式(true)时印刷与方位天生一致, 直通即可。
+    ES_LAYOUT_XBOX=1
     if grep -q '<bool name="InvertButtons" value="true"' "${ES_SETTINGS}" 2>/dev/null; then
-        ES_LAYOUT_XBOX=1
+        ES_LAYOUT_XBOX=0
     fi
 
     RA_DEVICE_NAME=$(get_udev_name_from_guid "${DEVICE_GUID}")
