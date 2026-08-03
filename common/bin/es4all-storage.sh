@@ -96,14 +96,23 @@ fstype_of() {
 	awk -v p="$1" '$2 == p { print $3 }' /proc/mounts | tail -1
 }
 
-# 失败时把已经做的挂载拆掉, 让 ${ROMS} 回到原本那份内盘。
-# ★停在中间状态最糟★: 那时 ES 看到的是空的或半套的 roms, 使用者会以为游戏没了。
-rollback() {
-	log "★回滚★"
-	is_mounted "${MERGED}" && umount "${MERGED}" 2>/dev/null
+# 把聚合整个拆掉, 让 ${ROMS} 回到发行版原本挂上来的那份内盘。
+#
+# ★顺序必须由上往下★: ${ROMS} 上那层 bind -> mergerfs 本体 -> 外接盘 -> 内盘的 bind。
+# 内盘那层留到最后 —— 它底下就是真正的 ROM 分区, 提早拆会变成卸不掉的残留。
+teardown() {
+	[ "$(fstype_of "${ROMS}")" = "fuse.mergerfs" ] && umount "${ROMS}" 2>/dev/null
+	is_mounted "${MERGED}"   && umount "${MERGED}" 2>/dev/null
 	is_mounted "${EXT_BASE}" && umount "${EXT_BASE}" 2>/dev/null
 	is_mounted "${INTERNAL}" && umount "${INTERNAL}" 2>/dev/null
 	return 0
+}
+
+# 失败时把已经做的挂载拆掉。
+# ★停在中间状态最糟★: 那时 ES 看到的是空的或半套的 roms, 使用者会以为游戏没了。
+rollback() {
+	log "★回滚★"
+	teardown
 }
 
 # ---------------------------------------------------------------------------
@@ -112,8 +121,19 @@ rollback() {
 GAMES_DEV=$(conf_get system.gamesdevice)
 
 if [ -z "${GAMES_DEV}" ]; then
-	# 没选外接盘 = 只用内盘。什么都不做, ${ROMS} 维持发行版挂上来的那份。
-	# 这里不留 log —— 这是绝大多数机器的常态, 每次开机写一行只会淹掉真正的讯息。
+	# 没选外接盘 = 只用内盘。
+	#
+	# ★但要先确认没有【上一轮留下来的】聚合★(实机踩过 2026-08-03):
+	# 挂载是系统层的东西, 重启 ES 不会动到它 —— 使用者在选单里切回内部储存、
+	# ES 重启完, /storage/roms 却还挂着上一轮的 mergerfs, 画面上照样是两颗盘的游戏,
+	# 看起来就是「设定没生效」。切换动作本身现在会重开机(见 ES 侧), 这里是第二道保险,
+	# 也涵盖「有人直接改设定档」的情形。
+	if [ "$(fstype_of "${ROMS}")" = "fuse.mergerfs" ]; then
+		log "已切回内部盘, 拆除上一轮的聚合"
+		teardown
+		log "拆除完成 -> ${ROMS} 现在是 $(fstype_of "${ROMS}")"
+	fi
+	# 平常什么都不做时不留 log —— 那是绝大多数机器的常态, 每次开机写一行只会淹掉真正的讯息。
 	exit 0
 fi
 

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.03.18",
+  "version": "2026.08.03.19",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -8,7 +8,7 @@
     { "path": "common/bin/apply.sh", "md5": "e249139a424fd5f73f67a8463dd5b272", "size": 14554 },
     { "path": "common/bin/es4all-gamelist-merge.py", "md5": "9c8e0703468bc2e73fddf229299d9f84", "size": 7006 },
     { "path": "common/bin/es4all-storage-detach.sh", "md5": "8b978bb8025654781ef6e50d1884a7fd", "size": 3160 },
-    { "path": "common/bin/es4all-storage.sh", "md5": "2457002a164fb302a62281b793eb13ff", "size": 10746 },
+    { "path": "common/bin/es4all-storage.sh", "md5": "1e251d92528d839bd564669cf75ff87c", "size": 11750 },
     { "path": "common/bin/es-input-to-retroarch.py", "md5": "ef4b49f6aa495ce0297279dfa6e9086e", "size": 6466 },
     { "path": "common/bin/mergerfs", "md5": "1d06969fc790f34751e535b6c18a4385", "size": 2429024 },
     { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "ee7c72b93dc8ecd62df41b32f3c7c34d", "size": 3900 },
