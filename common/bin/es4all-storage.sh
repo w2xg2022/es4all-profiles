@@ -110,6 +110,7 @@ fi
 #    也就不会在重挂时把发行版精心设定的挂载选项(codepage/iocharset 之类)弄丢。
 mkdir -p "${INTERNAL_HOLD}" "${EXT_BASE}" "${UPPER}" "${WORKDIR}"
 MOVED=0
+BOUND=0
 if is_mounted "${ROMS}"; then
 	if mount --move "${ROMS}" "${INTERNAL_HOLD}" 2>/dev/null; then
 		MOVED=1
@@ -119,10 +120,20 @@ if is_mounted "${ROMS}"; then
 		exit 0
 	fi
 else
-	# ${ROMS} 不是挂载点(例如 ROM 就放在 /storage 分区上的目录)。
-	# 这种情形不能 move, 改成把它当成 lower 之一直接用。
-	log "注意: ${ROMS} 不是挂载点, 直接把该目录当内部 ROM"
-	INTERNAL_HOLD="${ROMS}"
+	# ${ROMS} 不是挂载点(例如 ROM 就放在 /storage 分区上的目录, armbian 多半如此)。
+	# 这种情形不能 move, 改用 bind 复制一份出来当 lower。
+	#
+	# ★不能省掉这个 bind、直接拿 ${ROMS} 当 lowerdir★:
+	# 那会变成「把 overlay 挂在自己的 lower 上面」, 内核虽然在 mount 当下就解析完路径、
+	# 侥幸能跑, 但那是 undefined 的用法, 而且事后完全没办法再碰到底下那份原始目录
+	# (卸载顺序一错就救不回来)。bind 出一个独立路径, 结构就清清楚楚。
+	if mount --bind "${ROMS}" "${INTERNAL_HOLD}" 2>/dev/null; then
+		BOUND=1
+		log "注意: ${ROMS} 不是挂载点, 已 bind 到 ${INTERNAL_HOLD} 当内部 ROM"
+	else
+		log "★放弃★: ${ROMS} 不是挂载点且无法 bind 到 ${INTERNAL_HOLD}"
+		exit 0
+	fi
 fi
 
 # ② 外接盘
@@ -169,15 +180,23 @@ for dev in $(ext_candidates); do
 	log "外接盘 ${dev} -> ${SRC}"
 done
 
+# ★没有外接盘时【也要】叠 overlay(只有内部这一层)★
+#
+# 直觉上「没有外接盘就还原成原本挂法」看似安全, 实际上会制造一个更难懂的问题:
+# 聚合开着的时候, ES 的所有写入(游玩次数、收藏、重新刮的图)都落在 upper。
+# 若某次开机外接盘不在就不挂 overlay, upper 整个不参与 ->
+#   **连内部游戏的游玩纪录与刮削都会「消失」**, 插回外接盘又全部回来。
+# 资料其实没丢(还在 upper 里), 但这种【时有时无】比真的丢失更难排查。
+#
+# 所以: 只要聚合是开的, overlay 就一直在, 外接盘只决定 lower 有几层。
 if [ -z "${LOWER}" ]; then
-	log "没有找到可用的外接盘, 还原成原本的挂法"
-	[ "${MOVED}" = "1" ] && mount --move "${INTERNAL_HOLD}" "${ROMS}" 2>/dev/null
-	log "===== 聚合结束(未变更) ====="
-	exit 0
+	log "没有找到外接盘, 以单层(仅内部)叠 overlay —— 保持 upper 始终生效"
 fi
 
 # ③ 顺序 = 优先序。lowerdir 左边优先, 同名档案由左边那份胜出。
-if [ "$(conf_get system.merged.device)" = "internal" ]; then
+if [ -z "${LOWER}" ]; then
+	LOWER_ALL="${INTERNAL_HOLD}"
+elif [ "$(conf_get system.merged.device)" = "internal" ]; then
 	LOWER_ALL="${INTERNAL_HOLD}:${LOWER}"
 else
 	LOWER_ALL="${LOWER}:${INTERNAL_HOLD}"
@@ -213,6 +232,7 @@ else
 	# 表现就是「ES 一个游戏都看不到」—— 比不做聚合糟糕得多。
 	log "★overlay 挂载失败★, 还原成原本的挂法"
 	[ "${MOVED}" = "1" ] && mount --move "${INTERNAL_HOLD}" "${ROMS}" 2>/dev/null
+	[ "${BOUND}" = "1" ] && umount "${INTERNAL_HOLD}" 2>/dev/null
 fi
 
 log "===== 聚合结束 ====="
