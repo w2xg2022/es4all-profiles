@@ -181,6 +181,14 @@ selfmount_service() {
 			systemctl enable "${name}" >/dev/null 2>&1
 		fi
 	done
+
+	# ★drop-in 不需要 enable, 但需要 daemon-reload 才会被读进来★
+	# (例: emustation.service.d/10-es4all-storage.conf —— 聚合就挂在那上面)
+	# 新下发的 drop-in 若没 reload, 会等到下次开机才生效, 而症状是
+	# 「档案明明在、功能就是没跑」—— 又一个静默慢一拍。
+	if [ -n "$(ls -d /storage/.config/system.d/*.service.d 2>/dev/null)" ]; then
+		systemctl daemon-reload 2>/dev/null
+	fi
 }
 
 # ---------------------------------------------------------------------------

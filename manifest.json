@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "version": "2026.08.03.16",
+  "version": "2026.08.03.17",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
     { "path": "armbian/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "5fc2fa90be93a841acc775951d4ed363", "size": 2253 },
-    { "path": "common/bin/apply.sh", "md5": "8f0907fcf7420bd17d3ee59beb90f205", "size": 14105 },
+    { "path": "common/bin/apply.sh", "md5": "e249139a424fd5f73f67a8463dd5b272", "size": 14554 },
     { "path": "common/bin/es4all-gamelist-merge.py", "md5": "026b12eace52c72afcd8dfc4788427cc", "size": 4349 },
     { "path": "common/bin/es4all-storage-detach.sh", "md5": "2b2dcefb7619672e8d5079d9e74a7b7c", "size": 7087 },
     { "path": "common/bin/es4all-storage.sh", "md5": "9f9b9b876bafea0888391558dbf8770b", "size": 12784 },
@@ -24,8 +24,8 @@
     { "path": "emuelec/_common/storage-config/es4all/override/set_flycast_joy.sh", "md5": "dd1e5486a4d5f9d520899d7d6218a6fc", "size": 22296 },
     { "path": "emuelec/_common/storage-config/es4all/override/set_ppsspp_joy.sh", "md5": "eee9d12143d8e88ec57dfd3be2cfe657", "size": 7070 },
     { "path": "emuelec/_common/storage-config/es4all/override/setsettings.sh", "md5": "c48fef75f07530cf063b66e8f66aca30", "size": 32139 },
+    { "path": "emuelec/_common/storage-config/system.d/emustation.service.d/10-es4all-storage.conf", "md5": "70219ec946f48af0c7d9cda5e20027b2", "size": 1254 },
     { "path": "emuelec/_common/storage-config/system.d/es4all-selfmount.service", "md5": "7540ea1767cc77b2c6da971220a68965", "size": 895 },
-    { "path": "emuelec/_common/storage-config/system.d/es4all-storage.service", "md5": "1fd345f9278566f55ce42f20fe4dbb21", "size": 1070 },
     { "path": "emuelec/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "fa35d836aef063b0b24ee283d59b5c56", "size": 2039 },
     { "path": "emuelec/RK3566/MD1000/storage-config/es4all/emmc-layout.conf", "md5": "d7e6c352e2637628b0d85f8459a7e483", "size": 1838 },
     { "path": "emuelec/RK3566/MD1000/storage-config/es4all/psp-defaults.conf", "md5": "ab9d683b05ebfed65fa31c1940905435", "size": 718 },
