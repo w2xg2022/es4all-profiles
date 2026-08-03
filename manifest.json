@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.03.19",
+  "version": "2026.08.03.20",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -14,8 +14,10 @@
     { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "ee7c72b93dc8ecd62df41b32f3c7c34d", "size": 3900 },
     { "path": "emuelec/Amlogic-no/E900V22C/es-resources/audio_outputs.cfg", "md5": "579465ebedf2d251c9db514133e2c2be", "size": 1107 },
     { "path": "emuelec/Amlogic-no/E900V22C/storage-config/es4all/emmc-layout.conf", "md5": "21e22517ab0c9d977b633288f93eedc2", "size": 825 },
+    { "path": "emuelec/Amlogic-no/E900V22C/storage-config/es4all/psp-defaults.conf", "md5": "64b5f07dc45d856243dcc00d89282b63", "size": 900 },
     { "path": "emuelec/Amlogic-no/X98mini/es-resources/audio_outputs.cfg", "md5": "3351e1e114de04c8a5eca7460d479b28", "size": 1167 },
     { "path": "emuelec/Amlogic-no/X98mini/storage-config/es4all/emmc-layout.conf", "md5": "0986f1ed49b52b5550a177c7dacaea94", "size": 846 },
+    { "path": "emuelec/Amlogic-no/X98mini/storage-config/es4all/psp-defaults.conf", "md5": "b54c088a4735c41b2ae8e09c2c60313b", "size": 806 },
     { "path": "emuelec/_common/bin/installtoemmc-engine.sh", "md5": "8eaa4ccccd88f7907e26d725d603e715", "size": 32093 },
     { "path": "emuelec/_common/bin/installtoemmc.sh", "md5": "9088f20d21677fd705b6aaf1b1654c53", "size": 11874 },
     { "path": "emuelec/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
