@@ -719,29 +719,22 @@ if [[ -n "${EE_GAMEBTN_CORENAME_VAL}" ]]; then
                -e '/^input_player1_btn_x = "1"$/d' \
                -e '/^input_player1_btn_y = "9"$/d' "${EE_RMP_FILE}"
     fi
-    # ★唯一的例外: Apple II(AppleWin) 刻意把 A/B 对调回去★
+    # ★★apple2(AppleWin) 的「例外」已移除 —— 它不是特例, 是旧第一层的补偿★★
     #
-    # 三层架构的通则是「游戏内按位置」, 但 apple2 是**习惯特例**(架构定案时就保留的):
-    # 使用者按的是长年养成的手感, 不是几何位置, 所以这台机器上 A/B 要维持印刷对齐。
-    # ★做成【一个核心的具名例外】, 而不是把全域翻转改回来★ —— 全域翻转正是刚修掉的
-    # 「翻转语意 + 只翻一半」那个坑, 例外要小、要指名道姓、要写清楚为什么。
+    # 使用者的习惯(Lode Runner: 按南=左边挖洞、按东=右边挖洞)对应的是
+    #   南 -> RetroPad B、东 -> RetroPad A
+    # 而这正是**位置对齐 autoconfig 的天然输出**(RetroPad A 恒等於东、B 恒等於南)。
     #
-    # 值就是上面刚清掉的那两行(RetroPad A=8/B=0 -> a=0,b=8), 顺序上先清后写:
-    # 于是就算 RetroArch 把注释标记洗掉了, 下次启动也只会剩一份, 不会越叠越多。
+    # 那个 a=0/b=8 的翻转当初之所以需要, 是因为**旧的 autoconfig 是标签对齐**
+    # (RetroPad A 绑到印刷 A), 第三层只好把它扳回来。第一层改成方位对齐之后,
+    # 再翻一次就是**把对的翻成错的** —— 实机 2026-08-03 实测: apple2 的按键
+    # 「刻意对调」看起来失效了, 真因就是净效果被反了一次:
+    #     旧: 南->A->输出B、东->B->输出A   (符合习惯)
+    #     新: 东->A->输出B、南->B->输出A   (刚好相反)
+    # 移除翻转后: 南->B、东->A, 与习惯一致, 且与其他核心用同一条规则。
     #
-    # ★资料夹名必须是 library_name 不是 .info 的 corename★:
-    # applewin 的 .info 写小写 applewin, RA 运行时的 library_name 是大写 AppleWin,
-    # 写错资料夹 RA 就读不到, 表现是「明明设了却没作用」——
-    # 上面的 case 已经把它修正成 AppleWin, 这里直接比对修正后的值。
-    if [[ "${EE_GAMEBTN_CORENAME_VAL}" == "AppleWin" ]]; then
-        mkdir -p "${EE_RMP_DIR}"
-        {
-            echo "# BEGIN InvertGameButtons"
-            echo 'input_player1_btn_a = "0"'
-            echo 'input_player1_btn_b = "8"'
-            echo "# END InvertGameButtons"
-        } >> "${EE_RMP_FILE}"
-    fi
+    # ⚠️ 教训: 「特例」经常只是**下游在补偿上游的错**。上游修好之后要回头检查每一个
+    # 特例还成不成立, 否则它会从补偿变成新的偏差。
 
     # 移除標記後若檔案變成全空(該core原本沒有其他remap內容)，直接刪掉整個檔案/
     # 資料夾，避免RA讀到一個空remap檔案殘留在磁碟上
