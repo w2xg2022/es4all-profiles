@@ -180,6 +180,30 @@ bind-mount 直接换掉档案本身，不依赖任何顺序。
 改完跑 `./tools/sync_baseline.sh` 同步过去；`gen_manifest.sh` 会顺手 `--check` 并警告。
 两边各自维护必然漂移，而且**漂移了不会有人发现**——两份都能跑，只是行为不同。
 
+### 内外部盘聚合（mergerfs）
+
+`common/bin/mergerfs` —— **仓库里唯一的二进制档**（v2.42.0，官方 static aarch64 build，
+strip 后 2.4 MB，ISC 授权，sha256 `93557dfb…`）。
+
+⚠️ **为什么要收一个二进制进来**：这是本仓库第一次放非脚本的东西，值得说清楚。
+把它放进固件（EmuELEC package）当然也行，但那样每次要动它就得跑一次云编译；
+而它是个**静态、零依赖、不随机型变**的单一执行档，走 profile 下发完全够用，
+也让「改聚合行为不必重编固件」这条原则保持完整。
+
+⚠️ **假设 aarch64**：本仓库没有架构维度，而目前三个 target 的机器全是 aarch64。
+哪天有 x86 机器，得先决定架构怎么表达（多一层 scope？还是按 target 分？）再放第二份。
+
+**为什么不是 overlayfs**（2026-08-03 实机坐实，别再走回头路）：
+overlayfs **无法用于 FAT/exFAT/NTFS，连当 lowerdir 都不行** ——
+内核 `ovl_dentry_weird()` 会拒绝任何有自订 dentry 比对函式（`d_hash`/`d_compare`）的
+档案系统，而那正是**大小写不敏感**档案系统的特徵。
+多数人的 ROM 碟就是 FAT/exFAT（要在 Windows 上拷贝），所以那条路对多数使用者根本不可用。
+mergerfs 是 FUSE 层的 union，**分支是什么档案系统都无所谓**；FUSE 本来就在映像里
+（ntfs-3g 在用），无新增依赖。
+
+实机验证（MD1000/EmuELEC）：内盘 ext4 + 外盘 vfat → 平台数 112 → 152，
+psp 目录同时看到两边的 ISO，中文档名正常，聚合全程 1 秒。
+
 ### 键位精灵的触发钩子（controls-changed）
 
 `<target>/_common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh`
