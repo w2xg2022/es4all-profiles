@@ -1,12 +1,13 @@
 {
   "schema": 1,
-  "version": "2026.08.03.13",
+  "version": "2026.08.03.14",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
     { "path": "armbian/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "5fc2fa90be93a841acc775951d4ed363", "size": 2253 },
     { "path": "common/bin/apply.sh", "md5": "8f0907fcf7420bd17d3ee59beb90f205", "size": 14105 },
-    { "path": "common/bin/es4all-storage.sh", "md5": "f8aaae1aa54d8ac5be637e8e2256b07d", "size": 8750 },
+    { "path": "common/bin/es4all-gamelist-merge.py", "md5": "026b12eace52c72afcd8dfc4788427cc", "size": 4349 },
+    { "path": "common/bin/es4all-storage.sh", "md5": "e6d98b0f044139e867c51c000aa611cc", "size": 10051 },
     { "path": "common/bin/es-input-to-retroarch.py", "md5": "ef4b49f6aa495ce0297279dfa6e9086e", "size": 6466 },
     { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "ee7c72b93dc8ecd62df41b32f3c7c34d", "size": 3900 },
     { "path": "emuelec/Amlogic-no/E900V22C/es-resources/audio_outputs.cfg", "md5": "579465ebedf2d251c9db514133e2c2be", "size": 1107 },

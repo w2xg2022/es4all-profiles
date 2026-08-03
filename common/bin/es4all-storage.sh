@@ -183,7 +183,26 @@ else
 	LOWER_ALL="${LOWER}:${INTERNAL_HOLD}"
 fi
 
-# ④ 叠上去
+# ④ ★合并 gamelist★ —— 必须在叠上去【之前】做
+#    overlayfs 对目录是联集、对**档案**不是: 同名档只有优先序最高的看得见。
+#    gamelist.xml 正好是档案 -> 两颗盘都有 mame 时, 其中一份的刮削资料会被整个遮蔽,
+#    表现是「游戏都在, 但有一半突然变成没刮过」, 而图片其实还躺在 media/ 里(目录有合并),
+#    只是 XML 里引用它们的 <game> 条目没了。
+#    把合并结果写进 upperdir 就解决(upper 优先於所有 lower)。
+#    ⚠️ 合并只【补上缺的】、绝不覆盖 upper 已有的条目 —— 那份是 ES 的活档,
+#    里面有玩过次数/最后游玩/收藏这些只有 ES 知道的东西, 覆盖等於每次开机洗掉一次。
+MERGER="$(dirname "$0")/es4all-gamelist-merge.py"
+if [ -f "${MERGER}" ] && command -v python3 >/dev/null 2>&1; then
+	# 传入顺序要与 lowerdir 一致(左边优先), 所以直接把 LOWER_ALL 的冒号换成空白。
+	# shellcheck disable=SC2086
+	if ! python3 "${MERGER}" "${UPPER}" $(echo "${LOWER_ALL}" | tr ':' ' ') >> "${LOG}" 2>&1; then
+		log "注意: gamelist 合并失败(不影响挂载, 但两颗盘的刮削资料只会看到一份)"
+	fi
+else
+	log "注意: 找不到 python3 或合并脚本, 跳过 gamelist 合并"
+fi
+
+# ⑤ 叠上去
 if mount -t overlay es4all-roms \
 	-o "lowerdir=${LOWER_ALL},upperdir=${UPPER},workdir=${WORKDIR}" "${ROMS}" 2>/dev/null; then
 	log "已聚合 -> ${ROMS}"
