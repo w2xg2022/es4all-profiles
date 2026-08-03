@@ -32,7 +32,7 @@ CHECK=0
 # 哪天确定固件不必带, 从这张表移除并删掉 dist 那份即可。
 MAP='emuelec/_common/storage-config/emulationstation/scripts/configscripts/retroarch.sh|dist/emuelec/config/scripts/configscripts/retroarch.sh
 rocknix/_common/bin/setaudio.sh|dist/rocknix/sources/es4all-setauddev
-rocknix/_common/bin/installtoemmc.sh|dist/rocknix/sources/installtoemmc'
+rocknix/_common/bin/installtoemmc-engine.sh|dist/rocknix/sources/installtoemmc'
 
 if [ ! -d "${ES4ALL}" ]; then
 	# 不在同一台机器上也要能跑 —— 本脚本是辅助，不是必要条件。

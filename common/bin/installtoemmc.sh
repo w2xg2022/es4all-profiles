@@ -40,7 +40,32 @@ LOG=/storage/.config/es4all/installtoemmc.log
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "${LOG}"; }
 
-# ── 阶段 1: 脱离 emustation 的 cgroup ────────────────────────────────────────
+# ── 阶段 0: 发行版差异 ───────────────────────────────────────────────────────
+# ★2026-08-03 本档从 emuelec/_common 提升到 common/, 两个发行版共用★
+#   在那之前 ROCKNIX 【根本没有包装层】: ES 呼叫的 installtoemmc.sh 直接就是引擎本体。
+#   而 ES 是用 `... >/dev/null 2>&1 &` 在背景呼叫的, 引擎走到 `read ans` 等人敲 YES 时
+#   没有 stdin -> 立刻读到 EOF -> 判定「没输入 YES」-> abort, 输出还全被 /dev/null 吃掉。
+#   ★表现是「按了完全没反应」★, 从头到尾静默。
+#
+# ★判据用「设定档在哪」而不是猜发行版名★: 与 apply.sh / es4all-storage.sh 同一套 ——
+#   那个档的位置就是 ES 自己(Paths.cpp)认定的 config store, 与 ES 同源。
+if [ -f /storage/.config/system/configs/system.cfg ]; then
+	TARGET=rocknix
+	# ★ROCKNIX 的 ES 服务不叫 emustation★: 它跑在 sway 里, 单元名是 essway.service
+	# (见 rocknix/_common/storage-config/system.d/es4all-selfmount.service)。
+	# 停错服务不会报错, 后果是**画面没交出来** —— 使用者盯着一个不动的 ES 画面
+	# 看好几分钟, 而这偏偏是最容易被拔电的时候。
+	ES_SERVICE=essway.service
+	# ROCKNIX 的引擎是我们自己写的, 支援 --yes 旗标。
+	ONECLICK=flag
+else
+	TARGET=emuelec
+	ES_SERVICE=emustation.service
+	# EmuELEC 的引擎沿用上游那支的互动式确认, 没有旗标 -> 只能把 YES 灌进 stdin。
+	ONECLICK=pipe
+fi
+
+# ── 阶段 1: 脱离 ES 的 cgroup ────────────────────────────────────────
 # ★守卫必须用【参数】不能用环境变数★
 #   原本写成 `ES4ALL_EMMC_DETACHED=1 systemd-run --scope --setenv=... "$0"`,
 #   实机结果是那个变数【没有传进子行程】-> 守卫失效 -> 自己又去 systemd-run 一次
@@ -83,19 +108,24 @@ fi
 #
 # 为什么仍然分成两个档而不合并: 本档做的是「怎么让使用者看得见、按不到 YES 也能跑」,
 # 引擎做的是「怎么动这颗碟」, 两者的坑与改动节奏都不一样, 合起来是一支七百行的脚本。
+#
+# ★引擎按 target 各一份, 但档名相同★(E/_common 与 R/_common 各放一支
+#   installtoemmc-engine.sh) —— 分区方案本来就不同:
+#     EmuELEC/MD1000 : p1 EMUELEC | p2 STORAGE | p3 EEROMS(ROM 独立分区)
+#     ROCKNIX/MD1000 : p1 BOOT(不动) | p2 ROCKNIX | p3 STORAGE(ROM 在里面)
+#   本档只负责「怎么跑」, 不碰「怎么分」。
 ENGINE="$(dirname "$0")/installtoemmc-engine.sh"
-if [ -x "${ENGINE}" ]; then
-	INSTALLER="${ENGINE}"
-	ONECLICK=pipe
-elif [ -x /usr/bin/installtoemmc ]; then
-	# ROCKNIX 的原生安装器(档名不同、支援 --yes 一键)。
-	# 本档在 E/_common 只会下发给 EmuELEC, 这条是保留给日后 R/_common 那份的形状。
-	INSTALLER=/usr/bin/installtoemmc
-	ONECLICK=flag
-else
+if [ ! -x "${ENGINE}" ]; then
 	log "拒绝执行: 找不到 eMMC 安装引擎 (${ENGINE})。"
 	exit 1
 fi
+INSTALLER="${ENGINE}"
+
+# ★不再回退 /usr/bin/installtoemmc★(2026-08-03 移除)
+#   ①固件侧那支已经删掉了(installtoemmc 改随 profiles 发行);
+#   ②ROCKNIX 的 /usr/bin 底下有一支【上游的 installtointernal】, 名字很像但不是同一支
+#     —— MD1000 用了它会开不了机。留着回退路径等於给「找不到引擎时自动改用一支
+#     会把机器弄坏的程序」开了后门。宁可直接失败。
 
 log "===== 开始: board=${BOARD} installer=${INSTALLER} ====="
 
@@ -110,14 +140,28 @@ log "===== 开始: board=${BOARD} installer=${INSTALLER} ====="
 #
 # 修在这里而不是改发行版的安装器: 改那支要重编固件, 而这层本来就是为了「不必重编」
 # 才存在的。mask 模板单元 -> udev 那句 restart 会失败 -> 新分区不会被挂上。
+#
+# ★单元名各发行版不同, 所以扫一遍★: EmuELEC 是 udevil-mount@.service,
+#   ROCKNIX 还有自己那套 automount。这个坑与发行版无关(是 udev + 重新分区),
+#   但挡法要按各家的单元名。写死一个名字的后果不是报错, 是**在另一边完全没挡到**
+#   —— 而那种失败要等到 mkfs 那一步才炸, 那时候分区表已经改掉了。
+AUTOMOUNT_UNITS="udevil-mount@.service automount.service"
 AUTOMOUNT_MASKED=""
-if systemctl mask udevil-mount@.service >/dev/null 2>&1; then
-	AUTOMOUNT_MASKED=1
-	log "已 mask udevil-mount@.service(挡住重新分区后的自动挂载)"
-fi
+for u in ${AUTOMOUNT_UNITS}; do
+	# ★先确认这个单元真的存在再 mask★: systemctl mask 对不存在的单元也会「成功」
+	# (它只是建一条指向 /dev/null 的符号连结), 于是我们会留下一堆自己造出来的
+	# mask 状态, 而且以为挡到了。
+	systemctl list-unit-files "${u}" 2>/dev/null | grep -q "^${u}" || continue
+	if systemctl mask "${u}" >/dev/null 2>&1; then
+		AUTOMOUNT_MASKED="${AUTOMOUNT_MASKED} ${u}"
+		log "已 mask ${u}(挡住重新分区后的自动挂载)"
+	fi
+done
 
 restore_automount() {
-	[ -n "${AUTOMOUNT_MASKED}" ] && systemctl unmask udevil-mount@.service >/dev/null 2>&1
+	for u in ${AUTOMOUNT_MASKED}; do
+		systemctl unmask "${u}" >/dev/null 2>&1
+	done
 }
 
 # 顺手把现在挂着的 eMMC 分区先卸掉(上一次失败可能留下挂载)。
@@ -128,7 +172,7 @@ for mp in $(awk '$1 ~ /^\/dev\/mmcblk0p[0-9]+$/ {print $2}' /proc/mounts); do
 done
 
 # ── 阶段 4: 把画面交出来 ─────────────────────────────────────────────────────
-systemctl stop emustation 2>/dev/null
+systemctl stop "${ES_SERVICE}" 2>/dev/null
 sleep 2
 
 # 真正干活的那一小段, 让它同时写画面与日志。
@@ -202,7 +246,7 @@ if [ "${RC}" -ne 0 ]; then
 	# 安装器在动手前会做大小/装置检查, 检查不过就拒跑 —— 那种失败是安全的(什么都没改)。
 	log "失败, 重新启动 ES。日志见 ${LOG}"
 	restore_automount
-	systemctl start emustation 2>/dev/null
+	systemctl start "${ES_SERVICE}" 2>/dev/null
 	exit "${RC}"
 fi
 

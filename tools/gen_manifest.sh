@@ -45,7 +45,7 @@ files=$(find common armbian emuelec rocknix -type f 2>/dev/null | sed 's|^\./||'
 #
 # 一开始写成「所有 <target>/_common/ 底下同名档都比」，那是错的前提:
 # 三边同名不同内容【本来就是设计】—— setaudio.sh(裸 ALSA vs PipeWire vs ~/.asoundrc)、
-# installtoemmc.sh(两套分区逻辑)、selfmount unit(essway vs emustation)全都必须不同。
+# installtoemmc-engine.sh(两套分区逻辑)、selfmount unit(essway vs emustation)全都必须不同。
 # 那样一跑就是四条误报, 而噪音多的检查等於没有检查, 下次真漂移了也不会有人看。
 #
 # 所以改成白名单: 只有「刻意维持位元组相同」的复本才在这里盯。

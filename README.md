@@ -60,11 +60,13 @@ ES4All（armbian / emuelec / rocknix 三个 target）在**运行期**下发的�
 | 档 | 为什么在 common |
 |---|---|
 | `bin/apply.sh` | ES 呼叫的是 target 无关的 `scriptPath("apply.sh")`。原本只有 emuelec 有，结果 rocknix / armbian **什么一次性设定都不会跑**（PSP/DC 预设没套、selfmount 没人 enable、钩子执行位没人补）。三边差异只有几个路径，脚本内 detect 掉即可 |
+| `bin/installtoemmc.sh` | 写入 eMMC 的**包装层**（脱离 ES 的 cgroup、把画面交给终端机、挡 automount、成功后关机）。这些坑与分区方案无关，两边一模一样。★提升到 common 之前 ROCKNIX 没有这层★：ES 是背景呼叫的，引擎走到 `read ans` 等 YES 时读到 EOF 就 abort，输出还被 `/dev/null` 吃掉——表现是「按了完全没反应」 |
 | `bin/es-input-to-retroarch.py` | rocknix / armbian 没有 EmuELEC 那套 configscripts，用它把 `es_input.cfg` 直接转成 RA autoconfig |
 | `storage-config/…/controls-changed/10-inputconfig.sh` | 翻译**工具**三边不同，但「什么时候翻译」是同一件事，不该各写一份钩子 |
 
 ⚠️ **三边同名不同内容是设计，不是漂移**：`setaudio.sh`（裸 ALSA / PipeWire / `~/.asoundrc`）、
-`installtoemmc.sh`（两套分区逻辑）、selfmount unit（`essway` vs `emustation`）都必须各写一份。
+`installtoemmc-engine.sh`（两套分区逻辑）、selfmount unit（`essway` vs `emustation`）都必须各写一份。
+（**包装层** `installtoemmc.sh` 相反——那层与分区方案无关，已提升到 `common/`。）
 `gen_manifest.sh` 的一致性检查因此改成**白名单**（`SHARED_SAME`），目前只盯 `bin/selfmount.sh`
 —— 那是唯一刻意维持位元组相同的复本。噪音多的检查等於没有检查。
 
@@ -236,7 +238,7 @@ ES 的事件机制只认 `scripts/<事件名>/` 这个位置。
 | 机制 | 读的资料 |
 |---|---|
 | `setaudio.sh <card,device> <标签>` | 参数由 ES 从 `audio_outputs.cfg` 取出后传入 |
-| `installtoemmc.sh` | `storage-config/es4all/emmc-layout.conf` |
+| `installtoemmc.sh`（包装层，`common/`）→ `installtoemmc-engine.sh`（引擎，各 target 一份） | `storage-config/es4all/emmc-layout.conf` |
 
 **dest-root（落点根，各 target 实际路径不同，由客户端解析）**
 
@@ -263,7 +265,7 @@ ES 的事件机制只认 `scripts/<事件名>/` 这个位置。
 | 脚本 | 作用 |
 |---|---|
 | `setaudio.sh <card,device> <标签>` | 音源输出切换。有它就取代 ES 内建实作 |
-| `installtoemmc.sh` | 写入 eMMC 的**流程**（放 `_common`，每台都有） |
+| `installtoemmc-engine.sh` | 写入 eMMC 的**分区流程**（各 target 一份，每台都有） |
 
 ⚠️ 「退出选单要不要显示写入 eMMC」看的**不是**这支脚本，而是机型目录里有没有
 `storage-config/es4all/emmc-layout.conf`（见上面「机制 vs 资料」）。
