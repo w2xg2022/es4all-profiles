@@ -35,14 +35,35 @@
 #      长期会累积在 upper 上 —— 空间告急时先看这里。
 #
 # ============================================================================
-# 设定键(与 ROCKNIX automount 同名同义, 好让 R 版将来共用同一套 UI)
+# 设定键: ★只有一个★
 # ============================================================================
-#   system.merged.storage  1/0        1=聚合(本脚本), 0=维持发行版原本的二选一行为(预设)
-#   system.gamesdevice     /dev/xxx   指定外接装置; 空或 auto = 自动扫描
-#   system.merged.device   internal|external   同名档谁赢(external=外接优先, 预设)
+#   system.gamesdevice   空 = 只用内部盘;  <LABEL> = 该外接盘与内部盘【聚合】
 #
-# ★预设关闭★: 这会改动 /storage/roms 的挂载结构, 出错的代价是「ES 看不到游戏」。
-# 不该有人在不知情的情况下被切过去。
+# 选中一颗外接盘就代表「要合并」—— 不需要第二个「要不要合并」的开关。
+# 两个开关表达一件事, 只会制造「选了碟却没开合并」这种自相矛盾的状态。
+#
+# 重试(沿用 EmuELEC 既有的两个键, 语意相同):
+#   ee_mount.retry  次数(空=预设 10)     ee_load.delay  每次间隔秒数(空=预设 2)
+# ★为什么非有不可★: USB 列举可能比开机服务晚很多 —— ROCKNIX 实机量过
+# 「sda 开机 +3.9s 认出、sdb 要 +65.9s」, 它的 automount 在 +9.8s 就跑完并判定
+# 「没有外接碟」。没有重试的话, 我们会踩一模一样的坑。
+#
+# ============================================================================
+# 什么时候才叠 overlay
+# ============================================================================
+#     upper 是空的  且  没选外接盘   ->  不叠(等同从未启用过, 零改动)
+#     其他任何情况                  ->  叠
+#
+# ★upper 自己就是状态★: 「有没有启用过聚合」不需要另外存一个旗标 ——
+# 看 upper 有没有内容就知道。少一个会不同步的东西。
+#
+# ⚠️ ★为什么「选回内部盘」不能就不叠了★
+#   聚合开着时, ES 的所有写入都落在 upper —— 包含 **savestates**
+#   (Paths.cpp: mSaveStatesPath = /storage/roms/savestates, 就在 roms 底下)。
+#   若切回内部盘就不叠, 使用者那一刻失去的不只是刮削资料, **是存档**;
+#   而档案其实还在 upper 里, 只是看不到 —— 这种「不见了但没真的不见」最难处理。
+#   所以: 「选内部盘」= 不要外接盘的游戏(显示层), 「停用聚合」= 拆掉这套机制(结构层),
+#   两者是不同的事, 後者由 es4all-storage-detach.sh 负责(会先回写再清空)。
 
 set -u
 
@@ -92,13 +113,21 @@ is_mounted() {
 # ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
-MERGED=$(conf_get system.merged.storage)
-if [ "${MERGED}" != "1" ]; then
-	# 预设关闭。这里不留 log —— 关着是常态, 每次开机写一行只会淹掉真正的讯息。
+GAMES_DEV=$(conf_get system.gamesdevice)
+
+# upper 里有没有东西(= 以前启用过聚合、而且 ES 已经往里面写过)
+upper_has_content() {
+	[ -d "${UPPER}" ] || return 1
+	[ -n "$(ls -A "${UPPER}" 2>/dev/null)" ]
+}
+
+if [ -z "${GAMES_DEV}" ] && ! upper_has_content; then
+	# 从未启用过、这次也没选外接盘 -> 什么都不做。
+	# 这里不留 log —— 这是绝大多数机器的常态, 每次开机写一行只会淹掉真正的讯息。
 	exit 0
 fi
 
-log "===== 聚合开始 (target=${TARGET}) ====="
+log "===== 聚合开始 (target=${TARGET}, gamesdevice='${GAMES_DEV:-内部盘}') ====="
 
 if is_mounted "${ROMS}" && grep -q " ${ROMS} overlay " /proc/mounts; then
 	log "跳过: ${ROMS} 已经是 overlay(可能是重跑或发行版自己做的)"
@@ -136,68 +165,56 @@ else
 	fi
 fi
 
-# ② 外接盘
-#    指定优先(system.gamesdevice), 否则扫描。
-#    ★扫描时要排除【开机碟本身的分区】★ —— 否则会把 EEROMS 或 /flash 当成「外接盘」
-#    再挂一次, 结果是同一份内容出现两次, 而且看起来还很像成功。
-GAMES_DEV=$(conf_get system.gamesdevice)
-BOOT_DISK=$(awk '$2 == "/flash" { print $1 }' /proc/mounts | sed 's|[0-9]*$||')
-[ -n "${BOOT_DISK}" ] || BOOT_DISK=$(awk '$2 == "/storage" { print $1 }' /proc/mounts | sed 's|[0-9]*$||')
-
-ext_candidates() {
-	if [ -n "${GAMES_DEV}" ] && [ "${GAMES_DEV}" != "auto" ]; then
-		[ -e "${GAMES_DEV}" ] && echo "${GAMES_DEV}"
-		return 0
-	fi
-	blkid 2>/dev/null | cut -d: -f1 | while read -r dev; do
-		case "${dev}" in
-			"${BOOT_DISK}"*) continue ;;   # 开机碟自己的分区, 跳过
-			/dev/loop*|/dev/ram*) continue ;;
-		esac
-		# 已经被别人挂走的也跳过(udevil 常把 U 盘挂到 /var/media/…)
-		awk -v d="${dev}" '$1 == d { found = 1 } END { exit !found }' /proc/mounts && continue
-		echo "${dev}"
-	done
-}
+# ② 外接盘: 只认【选中的那一颗】(LABEL), 没选就只有内部盘。
+#
+# ★带重试★: USB 列举可能远晚於本服务 —— ROCKNIX 实机量过 sdb 要开机 +65.9 秒才出现,
+# 而它的 automount 在 +9.8 秒就跑完、判定「没有外接碟」, 之後每次都失败。
+# 次数/间隔沿用 EmuELEC 既有的两个设定键, 使用者本来就能在选单里调。
+RETRY=$(conf_get ee_mount.retry); [ -n "${RETRY}" ] || RETRY=10
+DELAY=$(conf_get ee_load.delay);  [ -n "${DELAY}" ] || DELAY=2
 
 LOWER=""
-N=0
-for dev in $(ext_candidates); do
-	N=$((N + 1))
-	MP="${EXT_BASE}"
-	[ "${N}" -gt 1 ] && MP="${EXT_BASE}${N}"
-	mkdir -p "${MP}"
-	if ! mount "${dev}" "${MP}" 2>/dev/null; then
-		log "跳过 ${dev}: 挂不上(档案系统不支援?)"
-		rmdir "${MP}" 2>/dev/null
-		N=$((N - 1))
-		continue
-	fi
-	# 只认「看起来像 ROM 盘」的: 根目录有 roms/ 就用 roms/, 否则用整颗盘
-	SRC="${MP}"
-	[ -d "${MP}/roms" ] && SRC="${MP}/roms"
-	LOWER="${LOWER}${LOWER:+:}${SRC}"
-	log "外接盘 ${dev} -> ${SRC}"
-done
+if [ -n "${GAMES_DEV}" ]; then
+	i=0
+	DEV=""
+	while [ "${i}" -lt "${RETRY}" ]; do
+		# 用 LABEL 解析成装置节点。★不存 /dev/sdb1 这种名字★ ——
+		# 它会随插拔顺序变, 换个 USB 孔就指到别颗碟上(ROCKNIX 就是踩这个)。
+		DEV=$(blkid -L "${GAMES_DEV}" 2>/dev/null)
+		[ -n "${DEV}" ] && break
+		i=$((i + 1))
+		[ "${i}" -lt "${RETRY}" ] && sleep "${DELAY}"
+	done
 
-# ★没有外接盘时【也要】叠 overlay(只有内部这一层)★
-#
-# 直觉上「没有外接盘就还原成原本挂法」看似安全, 实际上会制造一个更难懂的问题:
-# 聚合开着的时候, ES 的所有写入(游玩次数、收藏、重新刮的图)都落在 upper。
-# 若某次开机外接盘不在就不挂 overlay, upper 整个不参与 ->
-#   **连内部游戏的游玩纪录与刮削都会「消失」**, 插回外接盘又全部回来。
-# 资料其实没丢(还在 upper 里), 但这种【时有时无】比真的丢失更难排查。
-#
-# 所以: 只要聚合是开的, overlay 就一直在, 外接盘只决定 lower 有几层。
-if [ -z "${LOWER}" ]; then
-	log "没有找到外接盘, 以单层(仅内部)叠 overlay —— 保持 upper 始终生效"
+	if [ -z "${DEV}" ]; then
+		log "★等不到外接盘 '${GAMES_DEV}'★ (试了 ${RETRY} 次 x ${DELAY} 秒)"
+	else
+		[ "${i}" -gt 0 ] && log "外接盘 '${GAMES_DEV}' 在第 $((i + 1)) 次尝试才出现(等了约 $((i * DELAY)) 秒)"
+		# 已经被别人挂走的先收回来(udevil 常把 U 盘挂到 /var/media/…)。
+		# ★ROCKNIX 的 find_games 就是把「已出现在 /proc/mounts」当成不可用、直接放弃★,
+		# 明明它自己後面就有 umount /var/media/* 的处理, 却永远走不到。别学。
+		OLD_MP=$(awk -v d="${DEV}" '$1 == d { print $2 }' /proc/mounts | head -1)
+		if [ -n "${OLD_MP}" ] && [ "${OLD_MP}" != "${EXT_BASE}" ]; then
+			log "外接盘已被挂在 ${OLD_MP}, 先卸下"
+			umount "${OLD_MP}" 2>/dev/null
+		fi
+		mkdir -p "${EXT_BASE}"
+		if is_mounted "${EXT_BASE}" || mount "${DEV}" "${EXT_BASE}" 2>/dev/null; then
+			SRC="${EXT_BASE}"
+			[ -d "${EXT_BASE}/roms" ] && SRC="${EXT_BASE}/roms"
+			LOWER="${SRC}"
+			log "外接盘 ${DEV}(${GAMES_DEV}) -> ${SRC}"
+		else
+			log "★挂不上 ${DEV}★(档案系统不支援?)"
+		fi
+	fi
 fi
 
 # ③ 顺序 = 优先序。lowerdir 左边优先, 同名档案由左边那份胜出。
+#    外接盘在左 = 使用者刚插上的那颗赢, 与「我选了它」这个动作的直觉一致。
 if [ -z "${LOWER}" ]; then
 	LOWER_ALL="${INTERNAL_HOLD}"
-elif [ "$(conf_get system.merged.device)" = "internal" ]; then
-	LOWER_ALL="${INTERNAL_HOLD}:${LOWER}"
+	log "本次只有内部盘这一层(upper 仍然生效, 存档与刮削不会消失)"
 else
 	LOWER_ALL="${LOWER}:${INTERNAL_HOLD}"
 fi
