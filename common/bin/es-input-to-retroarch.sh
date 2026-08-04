@@ -59,13 +59,42 @@ function flush_device(   i, safe, path, name, key) {
 		else if (key in dpad_btn) emit(DPAD[key] " = \"" dpad_btn[key] "\"")
 	}
 
+	# ---- 热键: 先决定「热键键」是哪一颗 ------------------------------------
+	# ★没设 hotkeyenable 就拿 SELECT 顶上★(与 EmuELEC 的 configscripts 同一套做法)
+	hk_id = id_of["hotkeyenable"]
+	if (hk_id == "") hk_id = id_of["select"]
+
+	if (hk_id == "") {
+		# ★连 SELECT 都没有 -> 所有热键【整批不写】★(EmuELEC 也是这样做的)
+		#   RetroArch 在没有 input_enable_hotkey 时, 热键是【单键直接触发】的 ——
+		#   意思是游戏中按一下 X 就跳出 RA 选单、按 Y 就切 FPS, 完全没法玩。
+		#   宁可没有热键, 也不能变成单键误触。
+		print "注意: 没有 hotkeyenable 也没有 select, 热键整批跳过(否则会变成单键直接触发)"
+	} else {
+		emit("input_enable_hotkey_btn = \"" hk_id "\"")
+		for (i = 1; i <= hkn; i++) emit(hk[i])
+
+		# ★退出键 = SELECT / START 之中【不是热键键】的那一颗★
+		#   ES 的 es_input.cfg 没有「退出」这个栏位, 纯透传绑不出来, 只能推。
+		#   意图是「SELECT+START 退出」, 而使用者把哪一颗当热键并不固定
+		#   (2026-08-04 实机: 使用者【刻意】把 hotkeyenable 设成 START)。
+		#   EmuELEC 是把 exit 写死绑 START —— 那在这种设定下会让热键键与退出键
+		#   变成同一颗, 组合永远按不出来。改成取另一颗: 不论他挑哪一颗当热键,
+		#   SELECT+START 这个组合都成立; 而在一般情形(热键=SELECT)结果与写死完全相同。
+		#   ⚠️ 推不出另一颗时不产生退出键(宁缺勿错: 绑到同一颗只会让人以为
+		#      「按了没反应」, 比明白地没有更难查)。
+		exit_id = (hk_id == id_of["start"]) ? id_of["select"] : id_of["start"]
+		if (exit_id != "" && exit_id != hk_id)
+			emit("input_exit_emulator_btn = \"" exit_id "\"")
+	}
+
 	printf "" > path
 	for (i = 1; i <= n; i++) print out[i] >> path
 	close(path)
 	print "写入 " path
 
-	n = 0; dev_name = ""; dev_guid = ""
-	split("", dpad_hat); split("", dpad_btn)
+	n = 0; hkn = 0; dev_name = ""; dev_guid = ""
+	split("", dpad_hat); split("", dpad_btn); split("", id_of); split("", hk)
 }
 
 BEGIN {
@@ -107,7 +136,8 @@ BEGIN {
 	HK["leftshoulder"]="input_load_state_btn"
 	HK["x"]="input_menu_toggle_btn"
 	HK["y"]="input_fps_toggle_btn"
-	HK["start"]="input_exit_emulator_btn"
+	# ★退出键【不在这张表里】★: ES 的 es_input.cfg 根本没有「退出」这个栏位,
+	# 纯透传绑不出来。它在 flush_device() 里由 select/start 与热键键的关系推出来。
 
 	# 面键(A/B/X/Y): 按【物理位置】写死, 不看 es_input 记录的印刷字母。
 	# udev 语义码: 南=0 / 东=1 / 北=2 / 西=3, 而 RetroPad 的几何是 A=东、B=南、X=北、Y=西,
@@ -144,9 +174,15 @@ BEGIN {
 	id = attr($0, "id");   vl = attr($0, "value")
 
 	if (nm in BTN) {
-		v = (nm in POS) ? POS[nm] : id      # 面键按位置写死, 其余照实体 id
-		emit(BTN[nm] " = \"" v "\"")
-		if (nm in HK) emit(HK[nm] " = \"" id "\"")   # 热键一律绑实体键
+		# 记下实体 id: 热键键/退出键要靠 select、start、hotkeyenable 的关系推(见 flush_device)
+		id_of[nm] = id
+		# ★input_enable_hotkey_btn 不在这里写★: 它可能要退回 select, 统一到 flush 决定。
+		if (nm != "hotkeyenable") {
+			v = (nm in POS) ? POS[nm] : id      # 面键按位置写死, 其余照实体 id
+			emit(BTN[nm] " = \"" v "\"")
+		}
+		# ★热键先收着不写★: 没有热键键时整批都不能写(否则变成单键直接触发), 见 flush_device。
+		if (nm in HK) hk[++hkn] = HK[nm] " = \"" id "\""
 	} else if (nm in AX) {
 		if (tp == "axis") emit(AX[nm] " = \"" (vl + 0 >= 0 ? "+" : "-") id "\"")
 		else              emit(AX[nm] " = \"" id "\"")
