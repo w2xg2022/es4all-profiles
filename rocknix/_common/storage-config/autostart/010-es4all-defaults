@@ -89,4 +89,24 @@ if [ -d "${JP_SAVE}" ] && [ -d /storage/joypads ]; then
 	done
 fi
 
+# ---------------------------------------------------------------------------
+# ④ 关掉 RetroArch 的「再按一次退出」确认
+# ---------------------------------------------------------------------------
+# 热键+退出键本来就是【组合键】, 已经不可能误触, 再要求按第二次只是多一道墙:
+# 画面正中跳一个白框问「再按一次退出...」, 对电视盒使用者更像是当机。
+#
+# ★为什么要放在这里每次开机矫正★: 出厂模板 /usr/config/retroarch/retroarch.cfg
+# 写的是 true, 那个档在唯读的固件里改不了。/storage 那份平常是持久的,
+# 但只要它哪天被重建(还原出厂、换固件、手动删档), 白框就会无声无息回来。
+# 每次开机对一次最省事, 而且幂等 —— 值已经对了就不写。
+RA_CFG=/storage/.config/retroarch/retroarch.cfg
+if [ -f "${RA_CFG}" ] && ! grep -q '^quit_press_twice = "false"' "${RA_CFG}"; then
+	if grep -q '^quit_press_twice' "${RA_CFG}"; then
+		sed -i 's|^quit_press_twice.*|quit_press_twice = "false"|' "${RA_CFG}"
+	else
+		echo 'quit_press_twice = "false"' >> "${RA_CFG}"
+	fi
+	log "关闭 RetroArch 退出二次确认"
+fi
+
 exit 0
