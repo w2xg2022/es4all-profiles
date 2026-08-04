@@ -243,6 +243,13 @@ input_hook() {
 		[ -d "${dir}" ] || continue
 		chmod 0755 "${dir}"/*.sh 2>/dev/null
 	done
+
+	# ★autostart 也要补执行位★(2026-08-04)
+	#   profile 同步只对落在 bin/ 的档补执行位(见 Es4allProfiles 的 needsExecBit),
+	#   而 ROCKNIX 的 /storage/.config/autostart/ 底下那些档【必须可执行】才会被跑。
+	#   少了这一步的表现是「档案明明在、开机却什么都没发生」—— 与 controls-changed
+	#   钩子当初那个坑一模一样, 所以顺手一起处理。
+	[ -d "${ROOT_CFG}/autostart" ] && chmod 0755 "${ROOT_CFG}"/autostart/* 2>/dev/null
 	return 0
 }
 

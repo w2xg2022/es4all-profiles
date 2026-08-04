@@ -1,11 +1,11 @@
 {
   "schema": 1,
-  "version": "2026.08.04.4",
+  "version": "2026.08.04.5",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
     { "path": "armbian/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "5fc2fa90be93a841acc775951d4ed363", "size": 2253 },
-    { "path": "common/bin/apply.sh", "md5": "c679cf66ed01734a78a090c10190d9db", "size": 16250 },
+    { "path": "common/bin/apply.sh", "md5": "13cb0696ff9f56c239e424c319c15efb", "size": 16759 },
     { "path": "common/bin/es4all-gamelist-merge.py", "md5": "9c8e0703468bc2e73fddf229299d9f84", "size": 7006 },
     { "path": "common/bin/es4all-storage-detach.sh", "md5": "8b978bb8025654781ef6e50d1884a7fd", "size": 3160 },
     { "path": "common/bin/es4all-storage.sh", "md5": "a3b6ccffe5b3823c55971b428acf95b4", "size": 16492 },
@@ -37,6 +37,7 @@
     { "path": "rocknix/_common/bin/installtoemmc-engine.sh", "md5": "7e9cb23860f1c23488590df625602051", "size": 9251 },
     { "path": "rocknix/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "rocknix/_common/bin/setaudio.sh", "md5": "da949a31ca8f4d36f67fee0440d73f1b", "size": 3082 },
+    { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "7a885ce9741ee9eb064b7462c3bb8f17", "size": 3080 },
     { "path": "rocknix/_common/storage-config/es4all/override/start_ppsspp.sh", "md5": "a096567f1584a82c01d2ec937278974f", "size": 6993 },
     { "path": "rocknix/_common/storage-config/flycast/flycast.gptk", "md5": "86b89bae7b6b545952002f94c41222af", "size": 412 },
     { "path": "rocknix/_common/storage-config/ppsspp/PSP/SYSTEM/controls.ini", "md5": "d02491d1207549280877fce245dca8d7", "size": 322 },

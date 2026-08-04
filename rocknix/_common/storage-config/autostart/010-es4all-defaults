@@ -1,0 +1,64 @@
+#!/bin/sh
+# es4all: 开机时、★在 ES 启动之前★套用两件事 —— 音量预设与音源输出。
+#
+# ROCKNIX 会依序执行 /storage/.config/autostart/ 底下的档案, 时机在 ES 之前,
+# 这正是这两件事必须待在这里、而不是待在 apply.sh 的原因:
+#
+#   ① 音量预设
+#      apply.sh 是【ES 起来之后】由 ES 自己呼叫的, 那时 ES 早就把旧值读进记忆体了 ——
+#      改了档案, 选单显示的仍是旧值, 而且 ES 结束时会把记忆体那份写回去, 反手盖掉。
+#      实机 2026-08-04: apply.sh 明明写了 audio.volume=80, 使用者看到的还是 60。
+#      放在这里就没有这个时序问题: 档案先改好, ES 起来读到的就是新值。
+#
+#   ② 音源输出(HDMI / AV)
+#      ★PipeWire 的 default sink 每次开机都会重置★, 所以「选过一次就永远是那个」
+#      不成立 —— 必须每次开机重新套用一次, 否则设定只在当次有效。
+#
+# 幂等: 音量只在【标记档内容与建议值不同】时才写(使用者之后自己调的不会被覆盖);
+#       音源则是每次都套用(它本来就该跟着设定走)。
+# 失败一律不致命: 这是加值功能, 绝不能因为它让开机卡住。
+
+CFG=/storage/.config/system/configs/system.cfg
+ES4ALL_DIR=/storage/.config/es4all
+
+log() { echo "es4all-defaults: $*"; }
+
+conf_get() { sed -n "s/^$1=//p" "${CFG}" 2>/dev/null | head -1; }
+conf_set() {
+	[ -f "${CFG}" ] || : > "${CFG}"
+	if grep -q "^$1=" "${CFG}" 2>/dev/null; then
+		sed -i "s|^$1=.*|$1=$2|" "${CFG}"
+	else
+		echo "$1=$2" >> "${CFG}"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+# ① 音量预设
+# ---------------------------------------------------------------------------
+# 出厂 fallback 是 60(见 /usr/lib/autostart/common/050-audio 里写死的值), 对电视盒偏小 ——
+# 它们透过 HDMI 推外接喇叭/电视, 与 ROCKNIX 常见的掌机不同。
+# ★而且那个 60 首次开机就会被写回 system.cfg★, 从此变成「使用者的值」,
+# 固件端再改预设也追不回来, 所以既有机器只能从这里改。
+VOL_WANT=80
+VOL_STAMP="${ES4ALL_DIR}/.audio-volume-applied"
+if [ "$(cat "${VOL_STAMP}" 2>/dev/null)" != "${VOL_WANT}" ]; then
+	mkdir -p "${ES4ALL_DIR}"
+	conf_set audio.volume "${VOL_WANT}"
+	echo "${VOL_WANT}" > "${VOL_STAMP}"
+	log "音量预设 -> ${VOL_WANT}"
+fi
+
+# ---------------------------------------------------------------------------
+# ② 音源输出
+# ---------------------------------------------------------------------------
+# 无参数呼叫 = 读 system.audiooutput 重新套用(脚本自己有这条路径)。
+# ★必须每次开机跑★: PipeWire 的 default sink 不持久, 开机一律回到它自己挑的那个。
+AUDIO_OUT="$(conf_get system.audiooutput)"
+if [ -n "${AUDIO_OUT}" ] && [ -x "${ES4ALL_DIR}/bin/setaudio.sh" ]; then
+	sh "${ES4ALL_DIR}/bin/setaudio.sh" >/dev/null 2>&1 && \
+		log "音源输出重新套用 -> ${AUDIO_OUT}" || \
+		log "注意: 音源输出套用失败(不影响开机)"
+fi
+
+exit 0
