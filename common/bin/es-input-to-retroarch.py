@@ -49,11 +49,21 @@ HAT_DIR = {1: "up", 2: "right", 4: "down", 8: "left"}
 # ES 按键名 -> RetroArch 热键：绑到「印刷/实体按键」，避免 retroarch.cfg 写死的
 # 按钮编号在更换手柄后对应到错误的按键。意图（对齐 EmuELEC controller-guide）：
 #   SELECT+R1 = 存档 / SELECT+L1 = 读档 / SELECT+X = 呼出 RA 菜单 / SELECT+Y = 切换帧率
+#   SELECT+START = 退出游戏
+#
+# ★本表是热键的【唯一来源】★(2026-08-04 定案)
+#   ARMBIAN 侧原本由 es4all-1key 的 retroarch.cfg 写死按钮编号(enable_hotkey=6、
+#   menu_toggle=2、exit=7…)，那套编号是照某一颗手柄来的，与精灵按出来的实际编号
+#   对不上 —— 实机 MD1000 上两边刚好把 select/start 写反(cfg 说 6/7、autoconfig 是 7/6),
+#   于是「SELECT+X 呼出菜单」按下去毫无反应。1key 那些写死值已全部改成 nul 让位,
+#   热键完全由本表按【实际按出来的实体按钮】推导, 换任何手柄都对。
+#   ⚠️ 所以【少写一个键就等于那个功能消失】—— exit 就是这样漏掉过一次。
 HOTKEY_MAP = {
     "rightshoulder": "input_save_state_btn",
     "leftshoulder":  "input_load_state_btn",
     "x":             "input_menu_toggle_btn",
     "y":             "input_fps_toggle_btn",
+    "start":         "input_exit_emulator_btn",
 }
 
 # 面键（A/B/X/Y）：按【物理位置】写死，不看 es_input 记录的印刷字母。
