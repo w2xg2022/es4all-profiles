@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.04.16",
+  "version": "2026.08.04.17",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -37,7 +37,7 @@
     { "path": "emuelec/RK3566/MD1000/es-resources/audio_outputs.cfg", "md5": "fa35d836aef063b0b24ee283d59b5c56", "size": 2039 },
     { "path": "emuelec/RK3566/MD1000/storage-config/es4all/emmc-layout.conf", "md5": "d7e6c352e2637628b0d85f8459a7e483", "size": 1838 },
     { "path": "emuelec/RK3566/MD1000/storage-config/es4all/psp-defaults.conf", "md5": "ab9d683b05ebfed65fa31c1940905435", "size": 718 },
-    { "path": "rocknix/_common/bin/installtoemmc-engine.sh", "md5": "9362b59275231c7a7d013d35465b07d7", "size": 11337 },
+    { "path": "rocknix/_common/bin/installtoemmc-engine.sh", "md5": "ffd5794bdc40a8ba7559f3b9e64fc1f8", "size": 12801 },
     { "path": "rocknix/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "rocknix/_common/bin/setaudio.sh", "md5": "da949a31ca8f4d36f67fee0440d73f1b", "size": 3082 },
     { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "405a90bd6d66df8b43189ff14d23cf7a", "size": 11217 },

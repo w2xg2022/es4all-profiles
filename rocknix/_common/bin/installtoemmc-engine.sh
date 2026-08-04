@@ -199,6 +199,32 @@ for e in * .[!.]*; do
 done
 rm -rf /tmp/est/.cache/cores 2>/dev/null
 mkdir -p /tmp/est/roms /tmp/est/games-internal /tmp/est/games-external
+
+# ------------------------- rebuild the roms tree (structure only) ------------
+# "Games are not copied" must not mean "the rom folders are gone". Nothing on
+# ROCKNIX ever recreates that tree -- it ships prepopulated in the image, and
+# rocknix-systems only *checks* bios, it does not create anything. Skipping
+# roms wholesale left the freshly installed box with two directories (the ones
+# an emulator happened to create later), so most systems had nowhere to put
+# anything and ES had nothing to show.
+#
+# Two sources, both used:
+#   1. the tree we are installing from -- keeps anything non-standard the user made
+#   2. es_systems.cfg -- the authoritative list, and the only one that still works
+#      when the source tree is itself incomplete
+# bios/ IS copied: those are not games, several systems simply will not run
+# without them, and they are small.
+echo "-- rebuilding the roms folder structure (no games) --"
+if [ -d "$STORAGE/roms" ]; then
+  (cd "$STORAGE/roms" && find . -mindepth 1 -type d -print) 2>/dev/null | while read -r d; do
+    mkdir -p "/tmp/est/roms/$d"
+  done
+  [ -d "$STORAGE/roms/bios" ] && cp -a "$STORAGE/roms/bios" /tmp/est/roms/ 2>/dev/null
+fi
+ES_SYSTEMS="$STORAGE/.config/emulationstation/es_systems.cfg"
+[ -f "$ES_SYSTEMS" ] && sed -n 's#.*<path>/storage/roms/\([^<]*\)</path>.*#\1#p' "$ES_SYSTEMS" \
+  | sort -u | while read -r s; do mkdir -p "/tmp/est/roms/$s"; done
+echo "   $(ls /tmp/est/roms 2>/dev/null | wc -l) folders"
 sync
 
 # ------------------------- refresh the p1 chainload kernel/dtb + TRIGGER -------------------------
