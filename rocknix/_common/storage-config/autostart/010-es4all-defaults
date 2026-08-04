@@ -125,8 +125,13 @@ SS=/usr/bin/setsettings.sh
 SS_FIX="${ES4ALL_DIR}/bin/setsettings.sh"
 if grep -q 'es4all-position-align' "${SS}" 2>/dev/null; then
 	mkdir -p "$(dirname "${SS_FIX}")"
-	sed '/# es4all-position-align/d; /^ *echo .input_player1_btn_a = .0..$/d; /^ *echo .input_player1_btn_b = .8..$/d' \
-		"${SS}" > "${SS_FIX}"
+	# ★不能整行删★: 那三行 echo 分别待在 if 与 { } 里面, 删光就剩空的区块,
+	# bash 直接 syntax error(踩过一次: 「修正版语法检查未过」)。
+	# 把第一行换成 no-op(:) 再删另外两行, 结构就还在。
+	# 原本那句 sed -i 刻意【保留】—— 它正好会把 .rmp 里旧的残留行扫掉。
+	sed "s|echo '# es4all-position-align'|:|; \
+	     /echo 'input_player1_btn_a = \"0\"'/d; \
+	     /echo 'input_player1_btn_b = \"8\"'/d" "${SS}" > "${SS_FIX}"
 	chmod +x "${SS_FIX}"
 	# ★语法检查一定要用 bash★: setsettings.sh 满是 function/local 这类 bashism,
 	# 拿 ash 检查会直接判失败, 结果永远挂不上去(而且看起来像「修正版有问题」)。
