@@ -22,17 +22,28 @@ BUTTON_MAP = {
 }
 
 # ES 按键名 -> RetroArch autoconfig 按键名（摇杆轴类，含正负号）
+# ★摇杆的键名是 l_x / l_y / r_x / r_y，不是 left_x / right_x★
+#   (2026-08-04 实机 MD1000 查证: 类比摇杆完全没作用)
+#   本表原本写 input_left_x_plus_axis 这种名字 —— RetroArch 【根本没有这个键】,
+#   於是那几行被【静默忽略】: autoconfig 产生成功、档案里也看得到那几行,
+#   摇杆就是不会动, 而且没有任何错误讯息。
+#   验证方法(不必翻源码, 在机器上就能查):
+#       strings -a $(command -v retroarch) | grep -E '_(plus|minus)$'
+#     -> l_x_plus / l_x_minus / l_y_plus / l_y_minus / r_x_* / r_y_*
+#       strings -a $(command -v retroarch) | grep -cE '^(left|right)_(x|y)_(plus|minus)$'
+#     -> 0   (证明旧写法不存在)
+#   ⚠️ l2/r2/l3/r3 那几个短名字要用 strings -n 2 才看得到(预设最短 4 字元)。
 AXIS_MAP = {
     "lefttrigger": "input_l2_axis",
     "righttrigger": "input_r2_axis",
-    "leftanalogleft": "input_left_x_minus_axis",
-    "leftanalogright": "input_left_x_plus_axis",
-    "leftanalogup": "input_left_y_minus_axis",
-    "leftanalogdown": "input_left_y_plus_axis",
-    "rightanalogleft": "input_right_x_minus_axis",
-    "rightanalogright": "input_right_x_plus_axis",
-    "rightanalogup": "input_right_y_minus_axis",
-    "rightanalogdown": "input_right_y_plus_axis",
+    "leftanalogleft": "input_l_x_minus_axis",
+    "leftanalogright": "input_l_x_plus_axis",
+    "leftanalogup": "input_l_y_minus_axis",
+    "leftanalogdown": "input_l_y_plus_axis",
+    "rightanalogleft": "input_r_x_minus_axis",
+    "rightanalogright": "input_r_x_plus_axis",
+    "rightanalogup": "input_r_y_minus_axis",
+    "rightanalogdown": "input_r_y_plus_axis",
 }
 
 # ES 方向键名 -> RetroArch autoconfig 按键名（D-Pad）
