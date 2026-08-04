@@ -55,14 +55,25 @@ ES4All（armbian / emuelec / rocknix 三个 target）在**运行期**下发的�
 > 为什么不是三个仓库：三边大部分内容相同，拆开必然漂移。
 > 真正的差异只有【落点路径】和【消费脚本】，用 scope 覆盖表达就够。
 
-### `common/` 放什么（2026-08-03 起真的有东西了）
+### `common/` 放什么（2026-08-05 现况）
 
 | 档 | 为什么在 common |
 |---|---|
 | `bin/apply.sh` | ES 呼叫的是 target 无关的 `scriptPath("apply.sh")`。原本只有 emuelec 有，结果 rocknix / armbian **什么一次性设定都不会跑**（PSP/DC 预设没套、selfmount 没人 enable、钩子执行位没人补）。三边差异只有几个路径，脚本内 detect 掉即可 |
 | `bin/installtoemmc.sh` | 写入 eMMC 的**包装层**（脱离 ES 的 cgroup、把画面交给终端机、挡 automount、成功后关机）。这些坑与分区方案无关，两边一模一样。★提升到 common 之前 ROCKNIX 没有这层★：ES 是背景呼叫的，引擎走到 `read ans` 等 YES 时读到 EOF 就 abort，输出还被 `/dev/null` 吃掉——表现是「按了完全没反应」 |
-| `bin/es-input-to-retroarch.py` | rocknix / armbian 没有 EmuELEC 那套 configscripts，用它把 `es_input.cfg` 直接转成 RA autoconfig |
+| `bin/es-input-to-retroarch.sh` | rocknix / armbian 没有 EmuELEC 那套 configscripts，用它把 `es_input.cfg` 转成 RA autoconfig。★2026-08-04 从 python 改写成 sh + awk★：python3 不是三边都保证有，少了它整条链**静默失效**（精灵跑完 RA 却完全没变），awk 是 busybox 内建 |
+| `bin/es-joypad-evdev.sh` | ROCKNIX 专用的第二份 autoconfig：档名与 `input_device` 改用 **udev 名**，因为 `setsettings.sh` 是按 `/proc/bus/input/devices` 的名字找档，而 `es_input.cfg` 记的是 SDL 名——对不上就永远读不到我们这份。★内容照抄 es_input 的编号，不要去问 evdev★（理由见档头：山寨手柄 A/B 照位置报、X/Y 照字母报） |
+| `bin/es-joypad-evdevmap.sh` | 上一支的辅助：从能力位取装置名。它算的编号刻意不用 |
+| `bin/es-sdl-gcdb.sh` | 产一行 SDL gamecontrollerdb 对照。给**走 SDL 语意的模拟器**（PPSSPP）用——它们拿到的是 BACK/START 而不是按钮编号，哪颗实体键算 BACK 是 db 决定的，★改 controls.ini 的数字改不动★ |
+| `bin/psp-hotkeys.sh` | PPSSPP 的和弦（每次启动重写，因为乾净退出会洗掉）。热键要两层查表：es_input 的实体编号 → db 的语意名 → NKCODE。与 EmuELEC 的 `ppsspp.sh` 同一套逻辑 |
+| `bin/es-flycast-mapping.sh` | DC（flycast）的 `[combo]`。ROCKNIX 原本靠 gptokeyb，但**它不读 es_input.cfg**、预设热键是 Guide 键而这类手柄多半没有，於是组合键整套按不出来 |
+| `bin/es4all-storage.sh` / `es4all-storage-detach.sh` / `mergerfs` | 内外盘聚合。挂在各 target 的 ES 服务 `ExecStartPre` 上，所以「重启 ES」＝「重新套用挂载」 |
+| `bin/es4all-gamelist-merge.py` | 聚合时合并两侧的 gamelist |
 | `storage-config/…/controls-changed/10-inputconfig.sh` | 翻译**工具**三边不同，但「什么时候翻译」是同一件事，不该各写一份钩子 |
+
+> 键位那一整排（`es-input-to-retroarch` / `es-joypad-evdev` / `es-sdl-gcdb` / `psp-hotkeys` /
+> `es-flycast-mapping`）看起来很多，其实是同一句话的五种方言：
+> **键位的唯一真相是使用者在精灵里按的那一颗**，各模拟器只是吃的格式不同。
 
 ⚠️ **三边同名不同内容是设计，不是漂移**：`setaudio.sh`（裸 ALSA / PipeWire / `~/.asoundrc`）、
 `installtoemmc-engine.sh`（两套分区逻辑）、selfmount unit（`essway` vs `emustation`）都必须各写一份。
@@ -72,9 +83,12 @@ ES4All（armbian / emuelec / rocknix 三个 target）在**运行期**下发的�
 
 ### 共用层：真实需求是「部分 target 共用」，不是「三边共用」
 
-`common/` 一直空著，不是没人用，是**猜错了共用的维度**：当初以为会沿
+`common/` 曾经一直空著，不是没人用，是**猜错了共用的维度**：当初以为会沿
 「三边 vs 单边」分，实际是沿「**唯读 squashfs（emuelec/rocknix） vs 可写 rootfs（armbian）**」分。
 例：`selfmount.sh` 在 emuelec 与 rocknix 位元组相同，armbian 根本不需要 bind-mount。
+
+（**2026-08 起 `common/` 已经满了**——见上表。真正共用的东西後来自己长出来了：
+键位翻译、聚合、写入 eMMC 的包装层。当初猜错的是**哪些**东西共用，不是「有没有」。）
 
 **结论是不为此加组合 scope**（`ER/` 这种；下次可能又是别的组合，解析规则会越长越乱），
 改用工具挡住会实际发生的事 —— 忘记同步。`tools/gen_manifest.sh` 会比对
@@ -308,7 +322,20 @@ ES 的事件机制只认 `scripts/<事件名>/` 这个位置。
 安全性：仓库地址**写死在 ES 里，不开放使用者自订 URL**。
 本仓库内容包含可执行脚本，等同远程代码 —— 可设定 URL 就是把机器交出去。
 
-## 首刷
+## 首刷（烤进固件的 baseline）
 
-固件里仍要打包一份 baseline（= 现况）。本仓库只做**叠加更新**，
-不能是唯一来源，否则没网络的新机器会拿不到任何配置。
+固件里仍要打包一份 baseline。本仓库只做**叠加更新**，不能是唯一来源，
+否则没网络的新机器会拿不到任何配置——而且**全都是静默的**：
+音量回出厂值、跑完键位精灵没有任何东西被翻译给 RA/PSP/DC、聚合的 `ExecStartPre`
+指向不存在的档、「写入 eMMC」选单不出现。使用者只会觉得「这固件不对劲」。
+
+构建期注入的完整设计（两个固件树共用的**唯一正本**）：
+**[`docs/firmware-injection.md`](docs/firmware-injection.md)**
+
+两个固件树各有一条注入 lane（`inject-profiles.yml`），都只连回那份文件、不复述。
+核心决定是 **CI 不重写落点解析**——那会让落点规则有两份实作，分岔不报错，
+只会让同一个档在首开与联网後落在不同地方。
+
+> ⚠️ **尚未接线**：离线套用还需要 ES 侧一个 `Es4allProfiles::applyFromLocal()` 入口
+> （落点解析在 ES 的 C++ 里，不在 `apply.sh`——`apply.sh` 是档案就位**之後**的钩子）。
+> 在那之前，注入 lane 只会把 payload 放进映像，不会自动生效。
