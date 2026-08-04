@@ -90,35 +90,14 @@ if [ -d "${JP_SAVE}" ] && [ -d /storage/joypads ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# ★让 PPSSPP 读我们从精灵产的 SDL 对照表★
-# ---------------------------------------------------------------------------
-# PPSSPP 走 SDL GameController API, 拿到的是 BACK/START 这种语意名, 哪一颗实体键
-# 算 BACK 由 gamecontrollerdb 决定 —— 改 controls.ini 的数字改不动它。
-# SDL 认 SDL_GAMECONTROLLERCONFIG_FILE 这个环境变数, 优先於内建表; 而 start_ppsspp.sh
-# 没有设它。固件侧已补上, 但要重编才生效, 这里先 bind-mount 一份补好的顶着。
-# ★自我失效★: 固件已经有那行就整段跳过, 不会变成下一个「旧补丁没撤」。
-GCDB="${ES4ALL_DIR}/gamecontrollerdb.txt"
-SP=/usr/bin/start_ppsspp.sh
-SP_FIX="${ES4ALL_DIR}/bin/start_ppsspp.sh"
-if [ -f "${GCDB}" ] && [ -f "${SP}" ] && ! grep -q 'SDL_GAMECONTROLLERCONFIG_FILE' "${SP}"; then
-	mkdir -p "$(dirname "${SP_FIX}")"
-	# 插在第一行的 shebang 之后, 确保在启动 ppsspp 之前就 export 出去。
-	# 两处改动:
-	#   ① shebang 之后 export SDL 对照表(要在启动 ppsspp 之前就生效)
-	#   ② 固件写完自己那套和弦之后, 叫我们的 psp-hotkeys.sh 覆盖上去
-	#      —— 锚点用它自己那行 echo, 位置刚好在「写完和弦、还没启动」之间。
-	{ head -1 "${SP}"
-	  echo "export SDL_GAMECONTROLLERCONFIG_FILE=\"${GCDB}\"   # es4all: 键位精灵透传"
-	  tail -n +2 "${SP}" | sed "/^ *echo \"PSP HOTKEYS set/a\\
-[ -x ${ES4ALL_DIR}/bin/psp-hotkeys.sh ] \&\& sh ${ES4ALL_DIR}/bin/psp-hotkeys.sh"
-	} > "${SP_FIX}"
-	chmod +x "${SP_FIX}"
-	if bash -n "${SP_FIX}" 2>/dev/null; then
-		mount --bind "${SP_FIX}" "${SP}" && log "已挂上修正版 start_ppsspp.sh(SDL 对照表透传)"
-	else
-		log "注意: 修正版 start_ppsspp.sh 语法检查未过, 维持原样"
-	fi
-fi
+# ★PPSSPP 那边【不在这里】处理★(2026-08-04 一度做错, 留个记号)
+#   我曾在这里另外 bind-mount 一份补好的 start_ppsspp.sh。但 profiles 本来就有
+#   override 机制(es4all/override/ 由 selfmount.sh 挂到 /usr/bin), 於是同一个档
+#   ★叠了两层★, 而生效的是后挂的那层 —— 里面没有我的修改。
+#   表现是「改了完全没作用」, 偏偏两层都存在、各自看起来都对, 极难看出来
+#   (要 mount | grep 才会发现同一个路径出现两次)。
+#   ★同一个目标只能有一个机制★: PPSSPP 的修改一律进
+#   rocknix/_common/storage-config/es4all/override/start_ppsspp.sh。
 
 # ---------------------------------------------------------------------------
 # ④ PSP(PPSSPP)预设走 Vulkan

@@ -28,9 +28,25 @@ GCDB="${3:-${SDL_GAMECONTROLLERCONFIG_FILE:-/storage/.config/es4all/gamecontroll
 [ -f "${CONTROLS_INI}" ] || exit 0
 
 HOTKEY="10-196"        # 落不到时的保底 = SELECT
-# ★选单键一律【西】(SDL x = 10-191), 按位置不按印刷★
-#   与 EmuELEC 2026-08-02 的定案一致 —— 三边同一套心智模型, 不再各自解读。
+
+# ---- 选单键 = 【印刷 X】那一颗 ---------------------------------------------
+# ★与 RA / flycast 对齐: 三个模拟器都是「热键 + 印着 X 的那颗」开选单★
+#   ⚠️ 这一点【刻意与 EmuELEC 现况不同】: E 在 2026-08-02 改成一律按位置(西)。
+#   实机 2026-08-04 试出来的问题: 这支手柄是任天堂式印刷(X 在北、Y 在西),
+#   按位置的话选单键落在【印着 Y】那颗 —— 而同一台机器上 RA 与 DC 都是印刷 X,
+#   使用者在三个模拟器之间换来换去, 手指记的是「按 X」, 不是「按西边那颗」。
+#   面键在游戏内必须屈就位置(那是游戏的语意), 但组合键没有这个包袱。
+#   → E 那边建议一并改回印刷, 免得三边又分岔(待办)。
+#
+# 10-188~191 是 SDL 语意键(Y/A/B/X = 北/南/东/西), 位置固定;
+# 「印着 X 的是哪一颗」只有 ES 知道 —— 布局侦测写进 es_settings.cfg 的 InvertButtons:
+#   false = Xbox 式印刷(A 在南) -> 印刷 X 在西 = SDL X = 10-191
+#   true  = 任天堂式印刷(A 在东) -> 印刷 X 在北 = SDL Y = 10-188
 MENU_KEY="10-191"
+if grep -q '"InvertButtons" value="true"' \
+   "$(dirname "${ES_INPUT}")/es_settings.cfg" 2>/dev/null; then
+	MENU_KEY="10-188"
+fi
 
 # ---- 从 es_input.cfg 取实体按键编号 ---------------------------------------
 # ★只认 type="button"★: L2/R2 与摇杆在 ES 里记成 type="axis", 拿轴当和弦的修饰键
@@ -132,4 +148,4 @@ else
 	echo "Pause = ${HOTKEY}:${MENU_KEY}" >> "${CONTROLS_INI}"
 fi
 
-echo "PSP HOTKEYS set: hotkey=${HOTKEY}, menu(hotkey+西) = ${HOTKEY}:${MENU_KEY}"
+echo "PSP HOTKEYS set: hotkey=${HOTKEY}, menu(hotkey+印刷X) = ${HOTKEY}:${MENU_KEY}"

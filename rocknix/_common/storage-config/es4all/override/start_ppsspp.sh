@@ -118,6 +118,21 @@ fi
 sed -i "/^Language = [a-zA-Z]/c\\Language = ${PPLANG}" ${CONF_DIR}/${PPSSPP_INI}
 echo "UI LANGUAGE set to: ${PPLANG} (from system.language=${ESLANG})"
 
+# ★SELECT / START 从键位精灵透传 —— 唯一的槓桿是 SDL 的对照表★
+#
+# PPSSPP 走 SDL GameController API: 拿到的是 BACK / START / A / B 这种【语意名】,
+# 哪一颗实体键算 BACK 由 gamecontrollerdb 决定 —— ★改下面 controls.ini 里的数字
+# 改不动它★(10-196 就是 BACK 的语意码, 换个数字只是换成别的语意)。
+#
+# 实机 2026-08-04: 使用者刻意把「＋」(一般 START 的位置)设成 SELECT 兼热键、
+# 「−」设成 START; 但 SDL 内建的 xpad 对照是 back:b6(=「−」), 於是热键落在「−」上,
+# 与他设的正好相反。而「哪一颗算 SELECT」本来就没有客观答案, 只有精灵里的选择算数。
+#
+# 那份对照由 es4all-profiles 的 controls-changed 钩子(es-sdl-gcdb.sh)产生;
+# 没有就维持 SDL 内建表 —— 没跑过精灵的机器行为完全不变。
+ES4ALL_GCDB="/storage/.config/es4all/gamecontrollerdb.txt"
+[ -f "${ES4ALL_GCDB}" ] && export SDL_GAMECONTROLLERCONFIG_FILE="${ES4ALL_GCDB}"
+
 #组合键(和弦) —— ★每次启动都重写,不能只靠 controls.ini 模板★
 #
 # ★为什么必须每次重写★:PPSSPP 在【乾净退出】时会用内存里的映射覆写 controls.ini,
@@ -153,6 +168,13 @@ if [ -f "${CONTROLS_INI}" ]; then
   set_chord "Load State" "10-196:10-193"   # SELECT+L1   读档
   set_chord "Pause"      "10-196:${MENU_KEY}"  # SELECT+X 呼出菜单(跟印刷布局走)
   echo "PSP HOTKEYS set: exit/save/load fixed, menu(SELECT+X) = 10-196:${MENU_KEY}"
+
+  # ★热键改从键位精灵透传 —— 上面那套写死的只当保底★(2026-08-04)
+  #   上面写死 10-196(=SDL BACK)当修饰键, 隐含假设「使用者的热键一定是 SELECT」。
+  #   实际要两层查表: hotkeyenable=b7 -> 查 db 哪一笔是 :b7 -> back -> 10-196。
+  #   这段逻辑放在 psp-hotkeys.sh(与 EmuELEC 的 ppsspp.sh 同一套), 三边行为一致。
+  #   ⚠️ 别拿产出的值当透传生效的证据: 保底值常与实际热键撞成同值, 输出逐字节相同。
+  [ -x /storage/.config/es4all/bin/psp-hotkeys.sh ] && sh /storage/.config/es4all/bin/psp-hotkeys.sh
 fi
 
 #Retroachievements
