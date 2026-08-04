@@ -83,4 +83,23 @@ log "controls-changed: 转换 es_input.cfg -> ${OUT_DIR}"
 sh "${CONVERTER}" "${ES_INPUT}" "${OUT_DIR}" >> "${LOG}" 2>&1
 log "controls-changed: 完成(exit=$?)"
 
+# ★再跑一次, 这次用【只含刚设定那一支】的临时档★
+#
+# 为什么需要第二趟: ROCKNIX 的 setsettings.sh 按【evdev 名】找 joypad 档
+# (MY_CONTROLLER 取自 /proc/bus/input/devices), 而 es_input.cfg 记的是 SDL 名 ——
+# 档名对不上就永远读不到我们这份, 於是「精灵设了半天, 游戏里的热键还是出厂那套」。
+# 转换器因此会多写一份用 evdev 名命名的副本, 但那个名字是靠 VID/PID 反查
+# 【当前接着的装置】得到的, 只在输入档单一装置时才安全 ——
+# ROCKNIX 出厂的 es_input.cfg 有三笔共用 045e:028e, 一起转就会互相覆盖。
+#
+# ES 在触发本钩子【之前】刚好存了一份只含该装置的 es_temporaryinput.cfg
+# (InputManager::getTemporaryConfigPath), 拿它来做别名最精准。
+ES_TEMP="${ES_DIR:-${ROOT_CFG}/emulationstation}/es_temporaryinput.cfg"
+[ -f "${ES_TEMP}" ] || ES_TEMP="${HOME:-/storage}/.emulationstation/es_temporaryinput.cfg"
+if [ -f "${ES_TEMP}" ]; then
+	log "controls-changed: 用 es_temporaryinput.cfg 补 evdev 名别名"
+	sh "${CONVERTER}" "${ES_TEMP}" "${OUT_DIR}" >> "${LOG}" 2>&1
+	log "controls-changed: 别名完成(exit=$?)"
+fi
+
 exit 0
