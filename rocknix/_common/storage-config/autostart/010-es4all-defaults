@@ -89,6 +89,59 @@ if [ -d "${JP_SAVE}" ] && [ -d /storage/joypads ]; then
 	done
 fi
 
+# 同一条: PPSSPP 的 controls.ini 也被膠水每次开机盖成写死那份。
+PSP_SAVE="${ES4ALL_DIR}/ppsspp-controls.ini"
+PSP_LIVE=/storage/.config/ppsspp/PSP/SYSTEM/controls.ini
+if [ -f "${PSP_SAVE}" ] && [ -d "$(dirname "${PSP_LIVE}")" ] && \
+   ! cmp -s "${PSP_SAVE}" "${PSP_LIVE}"; then
+	cp -f "${PSP_SAVE}" "${PSP_LIVE}" && log "还原 PPSSPP 键位(被固件膠水盖掉了)"
+fi
+
+# ---------------------------------------------------------------------------
+# ④ PSP(PPSSPP)预设走 Vulkan
+# ---------------------------------------------------------------------------
+# ★不设的话拿到的不是「预设值」而是一个坏值★: start_ppsspp.sh 只认 opengl/vulkan,
+# 其余一律走 else 分支, 而那个分支写进 ppsspp.ini 的是【字面的 @GRENDERER@】——
+# 上游自己的 bug, 於是 GraphicsBackend 根本不是合法值。
+# RK3566 的 Mali-G52 走 Vulkan 比 GL 稳, 直接把它定为预设。
+# 幂等且只补【没设过】的: 使用者后来自己在选单改 opengl 不会被抢回来。
+if [ -f "${CFG}" ] && ! grep -q '^psp.graphics_backend=' "${CFG}"; then
+	conf_set psp.graphics_backend vulkan
+	log "PSP 图形后端预设 -> vulkan"
+fi
+
+# ---------------------------------------------------------------------------
+# ⑤ 撤掉固件 setsettings.sh 里的 A/B 位置对齐 remap
+# ---------------------------------------------------------------------------
+# ★又是「旧补丁没随新机制撤掉」★(2026-08-04 实机: 游戏内 A/B 整个翻转)
+#   固件的 setsettings.sh 有我们加的 set_position_remap, 每次启动游戏都往
+#   /storage/remappings/<核心>/<核心>.rmp 写 input_player1_btn_a="0" / btn_b="8"。
+#   当年那是必要的: joypad autoconfig 还是出厂那份(A 绑在南), 得靠这层翻转补位。
+#   现在精灵产的那份【本身就按位置对齐】(input_a_btn=东), 两层一叠就翻回去了。
+#
+#   固件侧已经删掉, 但要重编才生效; 这里用 bind-mount 挂一份修好的顶上,
+#   而且★自我失效★—— 固件更新后没有那个标记就整段跳过, 不会变成下一个旧补丁。
+SS=/usr/bin/setsettings.sh
+SS_FIX="${ES4ALL_DIR}/bin/setsettings.sh"
+if grep -q 'es4all-position-align' "${SS}" 2>/dev/null; then
+	mkdir -p "$(dirname "${SS_FIX}")"
+	sed '/# es4all-position-align/d; /^ *echo .input_player1_btn_a = .0..$/d; /^ *echo .input_player1_btn_b = .8..$/d' \
+		"${SS}" > "${SS_FIX}"
+	chmod +x "${SS_FIX}"
+	# ★语法检查一定要用 bash★: setsettings.sh 满是 function/local 这类 bashism,
+	# 拿 ash 检查会直接判失败, 结果永远挂不上去(而且看起来像「修正版有问题」)。
+	if bash -n "${SS_FIX}" 2>/dev/null; then
+		mount --bind "${SS_FIX}" "${SS}" && log "已挂上修正版 setsettings.sh(移除 A/B 翻转 remap)"
+	else
+		log "注意: 修正版 setsettings.sh 语法检查未过, 维持原样"
+	fi
+fi
+# 已经写进 .rmp 的那两行也要清掉 —— 它是累积写入的, 不清就一直在。
+for r in /storage/remappings/*/*.rmp; do
+	[ -f "${r}" ] || continue
+	sed -i '/# es4all-position-align/d; /^input_player1_btn_a = "0"$/d; /^input_player1_btn_b = "8"$/d' "${r}"
+done
+
 # ---------------------------------------------------------------------------
 # ④ 关掉 RetroArch 的「再按一次退出」确认
 # ---------------------------------------------------------------------------

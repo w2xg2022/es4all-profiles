@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.04.7",
+  "version": "2026.08.04.8",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -12,9 +12,10 @@
     { "path": "common/bin/es-input-to-retroarch.sh", "md5": "4f6ae86a6b48f4bc48f70ca5fa33ee4e", "size": 9074 },
     { "path": "common/bin/es-joypad-evdevmap.sh", "md5": "6ecc8786c4b6693d0d3696a1aaf8a47f", "size": 1968 },
     { "path": "common/bin/es-joypad-evdev.sh", "md5": "7067602e194b2a0272ddfc746c19eb82", "size": 7113 },
+    { "path": "common/bin/es-ppsspp-controls.sh", "md5": "c42954ab779509c90db58da8e5f5cad9", "size": 4510 },
     { "path": "common/bin/installtoemmc.sh", "md5": "13af80cb56fe0d4bfbd7345660c100f6", "size": 16179 },
     { "path": "common/bin/mergerfs", "md5": "1d06969fc790f34751e535b6c18a4385", "size": 2429024 },
-    { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "5816bf5bf7e02bb5d6bfa40a3faa190e", "size": 7266 },
+    { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "6b4e50033921411d0edede83d81510e7", "size": 8156 },
     { "path": "emuelec/Amlogic-no/E900V22C/es-resources/audio_outputs.cfg", "md5": "579465ebedf2d251c9db514133e2c2be", "size": 1107 },
     { "path": "emuelec/Amlogic-no/E900V22C/storage-config/es4all/emmc-layout.conf", "md5": "21e22517ab0c9d977b633288f93eedc2", "size": 825 },
     { "path": "emuelec/Amlogic-no/E900V22C/storage-config/es4all/psp-defaults.conf", "md5": "64b5f07dc45d856243dcc00d89282b63", "size": 900 },
@@ -37,7 +38,7 @@
     { "path": "rocknix/_common/bin/installtoemmc-engine.sh", "md5": "7e9cb23860f1c23488590df625602051", "size": 9251 },
     { "path": "rocknix/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "rocknix/_common/bin/setaudio.sh", "md5": "da949a31ca8f4d36f67fee0440d73f1b", "size": 3082 },
-    { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "34d618cc69af5789ac4b598ed300eb65", "size": 5917 },
+    { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "af4db009e852fbf546d223620aba190b", "size": 9080 },
     { "path": "rocknix/_common/storage-config/es4all/override/start_ppsspp.sh", "md5": "a096567f1584a82c01d2ec937278974f", "size": 6993 },
     { "path": "rocknix/_common/storage-config/flycast/flycast.gptk", "md5": "86b89bae7b6b545952002f94c41222af", "size": 412 },
     { "path": "rocknix/_common/storage-config/ppsspp/PSP/SYSTEM/controls.ini", "md5": "d02491d1207549280877fce245dca8d7", "size": 322 },

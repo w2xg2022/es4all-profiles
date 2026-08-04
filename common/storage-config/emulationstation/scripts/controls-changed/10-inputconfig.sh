@@ -123,6 +123,20 @@ if [ -d /storage/joypads ] && [ -x "${ROOT_CFG}/es4all/bin/es-joypad-evdev.sh" ]
 		#   autostart 的 010-es4all-defaults 会拿这份备份盖回去 —— 它跑在膠水之后。
 		mkdir -p "${ROOT_CFG}/es4all/joypads"
 		cp -f "${OUT_DIR}"/*.cfg "${ROOT_CFG}/es4all/joypads/" 2>/dev/null
+
+		# ★PSP 独立模拟器(PPSSPP)也要跟着精灵走★
+		#   它不吃 RA 的 autoconfig, 自己一份 controls.ini。固件里原本放一份【写死的】,
+		#   Select/Start 是照某一颗手柄量出来的按钮 8/9 —— 换一颗手柄就整个没反应,
+		#   而且完全静默。既然精灵已经是唯一真相, 这里一并翻译过去。
+		PPSSPP_INI="/storage/.config/ppsspp/PSP/SYSTEM/controls.ini"
+		if [ -d "$(dirname "${PPSSPP_INI}")" ] && \
+		   [ -x "${ROOT_CFG}/es4all/bin/es-ppsspp-controls.sh" ]; then
+			log "controls-changed: 产生 PPSSPP controls.ini"
+			sh "${ROOT_CFG}/es4all/bin/es-ppsspp-controls.sh" "${ES_TEMP}" \
+				"${PPSSPP_INI}" "${ROOT_CFG}/emulationstation/es_settings.cfg" >> "${LOG}" 2>&1
+			# 同样存一份给开机还原用(膠水也会盖这个档)。
+			cp -f "${PPSSPP_INI}" "${ROOT_CFG}/es4all/ppsspp-controls.ini" 2>/dev/null
+		fi
 	else
 		log "注意: 找不到 es_temporaryinput.cfg, 跳过 evdev 版"
 	fi
