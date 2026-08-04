@@ -20,22 +20,7 @@ OUT_DIR="${2:-${HOME:-/storage}/.config/retroarch/autoconfig}"
 [ -f "${ES_INPUT}" ] || exit 0
 mkdir -p "${OUT_DIR}" || exit 0
 
-# ★evdev 别名只在【单一装置】的输入档上做★
-#
-# 同一支手柄有三个名字, ROCKNIX 的 setsettings.sh 是按【evdev 名】找档的
-# (见 flush_device 的说明), 所以我们要多写一份用 evdev 名命名的副本。
-# 但 evdev 名是靠 VID/PID 反查【当前接着的装置】得到的 —— 如果输入档里有好几笔
-# 共用同一组 VID/PID(ROCKNIX 出厂的 es_input.cfg 就有三笔 045e:028e),
-# 那几笔会全部写到同一个档名上, 最后一笔胜出, 而那不一定是使用者刚设定的那支。
-#
-# ES 在触发 controls-changed 之前会另存一份【只含刚设定的那一支】的
-# es_temporaryinput.cfg —— 用它来做别名就精准。所以规则定成:
-#   输入档里只有一个 joystick -> 做别名; 有多个 -> 只写 SDL 名, 不猜。
-DEVCOUNT=$(grep -c '<inputConfig[^>]*type="joystick"' "${ES_INPUT}" 2>/dev/null || echo 0)
-ALIAS=0
-[ "${DEVCOUNT}" = "1" ] && ALIAS=1
-
-awk -v out_dir="${OUT_DIR}" -v do_alias="${ALIAS}" '
+awk -v out_dir="${OUT_DIR}" '
 # ---- 取属性值: attr($0, "deviceName") ----
 function attr(line, key,   s) {
 	if (match(line, key "=\"[^\"]*\"")) {
@@ -59,22 +44,6 @@ function le16(guid, off,   b0, b1) {
 }
 
 function emit(line) { out[++n] = line }
-
-# 用 VID/PID 反查核心给这支手柄的 evdev 名。
-# 走 /sys/class/input/event*/device/{id/vendor,id/product,name} —— 与 /proc/bus/input/devices
-# 同一份真相, 但不必解析那个多行格式。找不到就回空字串(呼叫端自己处理)。
-function evdev_name(want_vid, want_pid,   cmd, line, out) {
-	if (want_vid == "" || want_pid == "") return ""
-	cmd = "for d in /sys/class/input/event*/device; do" \
-	      " v=$(cat $d/id/vendor 2>/dev/null); p=$(cat $d/id/product 2>/dev/null);" \
-	      " if [ \"$v\" = \"" sprintf("%04x", want_vid) "\" ] && [ \"$p\" = \"" sprintf("%04x", want_pid) "\" ];" \
-	      " then cat $d/name 2>/dev/null; break; fi; done"
-	out = ""
-	while ((cmd | getline line) > 0) { out = line; break }
-	close(cmd)
-	sub(/[ \t\r\n]+$/, "", out)
-	return out
-}
 
 function flush_device(   i, safe, path, name, key) {
 	if (dev_name == "") return
@@ -119,41 +88,12 @@ function flush_device(   i, safe, path, name, key) {
 			emit("input_exit_emulator_btn = \"" exit_id "\"")
 	}
 
-	# ★同一支手柄有三个名字, 这里要写【两份】★(2026-08-04 ROCKNIX 实机)
-	#
-	#   SDL 名 : "Xbox 360 Controller"      <- es_input.cfg 记的、我们本来只写这个
-	#   evdev 名: "Microsoft X-Box 360 pad"  <- 核心驱动给的
-	#
-	# ROCKNIX 的 setsettings.sh 在每次启动游戏时【从 joypad 档反推 RA 热键】,
-	# 而它找档的方式是: MY_CONTROLLER=从 /proc/bus/input/devices 取【evdev 名】,
-	# 然后读 /tmp/joypads/<那个名字>.cfg。档名对不上就永远读不到我们这份 ——
-	# 表现是「精灵设了半天, 游戏里的热键还是出厂那套」, 而且完全静默。
-	# RA 自己配对 autoconfig 也一样: udev driver 看到的是 evdev 名, 不是 SDL 名。
-	#
-	# 所以 evdev 名那份才是主角; SDL 名那份仍然写, 给 sdl2 joypad driver 的场合用。
-	# 两份内容只差 input_device 那一行。
-	ev = (do_alias == "1") ? evdev_name(vid, pid) : ""
-	if (ev != "" && ev != dev_name) {
-		safe2 = ev
-		gsub(/[^A-Za-z0-9 _-]/, "_", safe2)
-		sub(/^ +/, "", safe2); sub(/ +$/, "", safe2)
-		path2 = out_dir "/" safe2 ".cfg"
-		printf "" > path2
-		for (i = 1; i <= n; i++) {
-			line = out[i]
-			if (line ~ /^input_device = /) line = "input_device = \"" ev "\""
-			print line >> path2
-		}
-		close(path2)
-		print "写入 " path2 " (evdev 名, 供 udev driver 与 ROCKNIX setsettings 使用)"
-	}
-
 	printf "" > path
 	for (i = 1; i <= n; i++) print out[i] >> path
 	close(path)
 	print "写入 " path
 
-	n = 0; hkn = 0; dev_name = ""; dev_guid = ""; vid = ""; pid = ""
+	n = 0; hkn = 0; dev_name = ""; dev_guid = ""
 	split("", dpad_hat); split("", dpad_btn); split("", id_of); split("", hk)
 }
 

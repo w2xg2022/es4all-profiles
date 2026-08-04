@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.04.3",
+  "version": "2026.08.04.4",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -9,10 +9,12 @@
     { "path": "common/bin/es4all-gamelist-merge.py", "md5": "9c8e0703468bc2e73fddf229299d9f84", "size": 7006 },
     { "path": "common/bin/es4all-storage-detach.sh", "md5": "8b978bb8025654781ef6e50d1884a7fd", "size": 3160 },
     { "path": "common/bin/es4all-storage.sh", "md5": "a3b6ccffe5b3823c55971b428acf95b4", "size": 16492 },
-    { "path": "common/bin/es-input-to-retroarch.sh", "md5": "57fa5c327359266dfb8a549f13bb9b43", "size": 12247 },
+    { "path": "common/bin/es-input-to-retroarch.sh", "md5": "4f6ae86a6b48f4bc48f70ca5fa33ee4e", "size": 9074 },
+    { "path": "common/bin/es-joypad-evdevmap.sh", "md5": "6ecc8786c4b6693d0d3696a1aaf8a47f", "size": 1968 },
+    { "path": "common/bin/es-joypad-evdev.sh", "md5": "97ad98666c79ac2f6baa0e66726b74a9", "size": 6821 },
     { "path": "common/bin/installtoemmc.sh", "md5": "13af80cb56fe0d4bfbd7345660c100f6", "size": 16179 },
     { "path": "common/bin/mergerfs", "md5": "1d06969fc790f34751e535b6c18a4385", "size": 2429024 },
-    { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "deef62d5205b66213c1fe76a7a4a6ebe", "size": 5459 },
+    { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "ef31c02b13fcdc973b3494b80219222e", "size": 6824 },
     { "path": "emuelec/Amlogic-no/E900V22C/es-resources/audio_outputs.cfg", "md5": "579465ebedf2d251c9db514133e2c2be", "size": 1107 },
     { "path": "emuelec/Amlogic-no/E900V22C/storage-config/es4all/emmc-layout.conf", "md5": "21e22517ab0c9d977b633288f93eedc2", "size": 825 },
     { "path": "emuelec/Amlogic-no/E900V22C/storage-config/es4all/psp-defaults.conf", "md5": "64b5f07dc45d856243dcc00d89282b63", "size": 900 },

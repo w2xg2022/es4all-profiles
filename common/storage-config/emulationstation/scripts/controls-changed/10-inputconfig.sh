@@ -94,12 +94,31 @@ log "controls-changed: 完成(exit=$?)"
 #
 # ES 在触发本钩子【之前】刚好存了一份只含该装置的 es_temporaryinput.cfg
 # (InputManager::getTemporaryConfigPath), 拿它来做别名最精准。
-ES_TEMP="${ES_DIR:-${ROOT_CFG}/emulationstation}/es_temporaryinput.cfg"
-[ -f "${ES_TEMP}" ] || ES_TEMP="${HOME:-/storage}/.emulationstation/es_temporaryinput.cfg"
-if [ -f "${ES_TEMP}" ]; then
-	log "controls-changed: 用 es_temporaryinput.cfg 补 evdev 名别名"
-	sh "${CONVERTER}" "${ES_TEMP}" "${OUT_DIR}" >> "${LOG}" 2>&1
-	log "controls-changed: 别名完成(exit=$?)"
+# ★只有 ROCKNIX 走这一步★(2026-08-04 定案)
+#   A/E 已经验过、行为不动; 这支只补 R 缺的那一块。判据用 /storage/joypads ——
+#   那是 ROCKNIX 的 autoconfig 落点(也是 /tmp/joypads 这个 overlay 的 upper)。
+if [ -d /storage/joypads ] && [ -x "${ROOT_CFG}/es4all/bin/es-joypad-evdev.sh" ]; then
+	ES_TEMP="${ROOT_CFG}/emulationstation/es_temporaryinput.cfg"
+	[ -f "${ES_TEMP}" ] || ES_TEMP="${HOME:-/storage}/.emulationstation/es_temporaryinput.cfg"
+	if [ -f "${ES_TEMP}" ]; then
+		# ★为什么非要另外产一份不可★
+		#   同一支手柄有两套按钮编号: SDL(es_input.cfg 记的)与 udev(核心 evdev 顺序),
+		#   而且每一组都是对调的(SDL a=1 b=0 select=7 start=6 / udev a=0 b=1 select=6 start=7)。
+		#   RetroArch 与 ROCKNIX 的 setsettings.sh 用的都是 udev 那套 —— 照抄 SDL 编号
+		#   会让热键落在错的实体键上(热键变 START、选单变 Y)。
+		#   而且 setsettings.sh 是按【evdev 名】找档的(MY_CONTROLLER 取自
+		#   /proc/bus/input/devices), 档名对不上根本读不到我们这份。
+		#   所以这一份用 evdev 名命名、用 evdev 编号, 两个问题一起解决。
+		#
+		#   ★热键仍以键位精灵的结果为黄金标准★: 哪一颗当热键、印刷 X 在哪只有 ES 知道,
+		#   那支脚本会拿 es_input 的 SDL id 反查语意名、再对到实体按键。
+		log "controls-changed: 产生 evdev 编号的 joypad 档(ROCKNIX)"
+		sh "${ROOT_CFG}/es4all/bin/es-joypad-evdev.sh" "${ES_TEMP}" "${OUT_DIR}" \
+			"${ROOT_CFG}/emulationstation/es_settings.cfg" >> "${LOG}" 2>&1
+		log "controls-changed: evdev 版完成(exit=$?)"
+	else
+		log "注意: 找不到 es_temporaryinput.cfg, 跳过 evdev 版"
+	fi
 fi
 
 exit 0
