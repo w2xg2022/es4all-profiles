@@ -158,13 +158,22 @@ done
 # 但只要它哪天被重建(还原出厂、换固件、手动删档), 白框就会无声无息回来。
 # 每次开机对一次最省事, 而且幂等 —— 值已经对了就不写。
 RA_CFG=/storage/.config/retroarch/retroarch.cfg
-if [ -f "${RA_CFG}" ] && ! grep -q '^quit_press_twice = "false"' "${RA_CFG}"; then
-	if grep -q '^quit_press_twice' "${RA_CFG}"; then
-		sed -i 's|^quit_press_twice.*|quit_press_twice = "false"|' "${RA_CFG}"
+
+# 同一个理由(出厂模板在唯读固件里)顺手矫正的几项。
+ra_set() {   # $1=键 $2=值; 幂等, 值已经对了就不写
+	[ -f "${RA_CFG}" ] || return 0
+	grep -q "^$1 = \"$2\"" "${RA_CFG}" && return 0
+	if grep -q "^$1" "${RA_CFG}"; then
+		sed -i "s|^$1.*|$1 = \"$2\"|" "${RA_CFG}"
 	else
-		echo 'quit_press_twice = "false"' >> "${RA_CFG}"
+		echo "$1 = \"$2\"" >> "${RA_CFG}"
 	fi
-	log "关闭 RetroArch 退出二次确认"
-fi
+	log "RetroArch $1 -> $2"
+}
+
+ra_set quit_press_twice false
+# 选单字体: 出厂 0.86 在电视上偏大(掌机的预设值直接搬过来的), 电视盒坐得远、
+# 解析度也高, 缩到 0.65 一页看得到的项目才够多。
+ra_set menu_scale_factor 0.650000
 
 exit 0

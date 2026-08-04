@@ -137,6 +137,16 @@ if [ -d /storage/joypads ] && [ -x "${ROOT_CFG}/es4all/bin/es-joypad-evdev.sh" ]
 			# 同样存一份给开机还原用(膠水也会盖这个档)。
 			cp -f "${PPSSPP_INI}" "${ROOT_CFG}/es4all/ppsspp-controls.ini" 2>/dev/null
 		fi
+
+		# ★DC 独立模拟器(flycast)★: 走 flycast v4 原生 [combo], 不靠 gptokeyb。
+		#   gptokeyb 不读 es_input.cfg, 它的热键预设是 Guide 键, 而这类手柄多半没有,
+		#   於是组合键整套按不出来且没有提示。与 EmuELEC 侧同一套做法。
+		FLYCAST_MAP="/storage/.config/flycast/mappings"
+		if [ -d "${FLYCAST_MAP}" ] && [ -x "${ROOT_CFG}/es4all/bin/es-flycast-mapping.sh" ]; then
+			log "controls-changed: 产生 flycast mapping"
+			sh "${ROOT_CFG}/es4all/bin/es-flycast-mapping.sh" "${ES_TEMP}" \
+				"${FLYCAST_MAP}" "${ROOT_CFG}/emulationstation/es_settings.cfg" >> "${LOG}" 2>&1
+		fi
 	else
 		log "注意: 找不到 es_temporaryinput.cfg, 跳过 evdev 版"
 	fi
