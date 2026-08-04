@@ -224,6 +224,13 @@ fi
 ES_SYSTEMS="$STORAGE/.config/emulationstation/es_systems.cfg"
 [ -f "$ES_SYSTEMS" ] && sed -n 's#.*<path>/storage/roms/\([^<]*\)</path>.*#\1#p' "$ES_SYSTEMS" \
   | sort -u | while read -r s; do mkdir -p "/tmp/est/roms/$s"; done
+# Folders under roms/ that are not systems, so es_systems.cfg does not list them,
+# but firmware scripts write into them by absolute path (grep /usr/bin for
+# /storage/roms/<name>). Missing, they are created on demand as root-owned or
+# the write just fails somewhere with no message.
+for extra in backup backups bezels savestates screenshots; do
+  mkdir -p "/tmp/est/roms/$extra"
+done
 echo "   $(ls /tmp/est/roms 2>/dev/null | wc -l) folders"
 sync
 
