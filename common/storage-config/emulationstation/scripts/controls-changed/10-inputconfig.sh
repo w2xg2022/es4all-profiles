@@ -34,7 +34,11 @@ fi
 ES_SCRIPTS="${ROOT_CFG}/emulationstation/scripts"
 INPUTCONFIG="${ES_SCRIPTS}/inputconfiguration.sh"
 ES_INPUT="${ROOT_CFG}/emulationstation/es_input.cfg"
-CONVERTER="${ROOT_CFG}/es4all/bin/es-input-to-retroarch.py"
+# ★转换器已从 python 改成 sh + awk★(2026-08-04)
+#   python3 不是三个发行版都保证有 —— 少了它, 下面那句呼叫会直接失败, 表现是
+#   「键位精灵跑完了, RetroArch 里却完全没生效」, 而且没有任何提示。
+#   awk 是 busybox 都内建的, E/R/A 三边一定跑得起来, 少一个会静默失效的前提。
+CONVERTER="${ROOT_CFG}/es4all/bin/es-input-to-retroarch.sh"
 LOG="${ROOT_CFG}/es4all/controls-changed.log"
 
 mkdir -p "$(dirname "${LOG}")"
@@ -76,7 +80,7 @@ fi
 
 mkdir -p "${OUT_DIR}"
 log "controls-changed: 转换 es_input.cfg -> ${OUT_DIR}"
-python3 "${CONVERTER}" "${ES_INPUT}" "${OUT_DIR}" >> "${LOG}" 2>&1
+sh "${CONVERTER}" "${ES_INPUT}" "${OUT_DIR}" >> "${LOG}" 2>&1
 log "controls-changed: 完成(exit=$?)"
 
 exit 0
