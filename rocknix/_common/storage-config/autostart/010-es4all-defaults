@@ -89,12 +89,30 @@ if [ -d "${JP_SAVE}" ] && [ -d /storage/joypads ]; then
 	done
 fi
 
-# 同一条: PPSSPP 的 controls.ini 也被膠水每次开机盖成写死那份。
-PSP_SAVE="${ES4ALL_DIR}/ppsspp-controls.ini"
-PSP_LIVE=/storage/.config/ppsspp/PSP/SYSTEM/controls.ini
-if [ -f "${PSP_SAVE}" ] && [ -d "$(dirname "${PSP_LIVE}")" ] && \
-   ! cmp -s "${PSP_SAVE}" "${PSP_LIVE}"; then
-	cp -f "${PSP_SAVE}" "${PSP_LIVE}" && log "还原 PPSSPP 键位(被固件膠水盖掉了)"
+# ---------------------------------------------------------------------------
+# ★让 PPSSPP 读我们从精灵产的 SDL 对照表★
+# ---------------------------------------------------------------------------
+# PPSSPP 走 SDL GameController API, 拿到的是 BACK/START 这种语意名, 哪一颗实体键
+# 算 BACK 由 gamecontrollerdb 决定 —— 改 controls.ini 的数字改不动它。
+# SDL 认 SDL_GAMECONTROLLERCONFIG_FILE 这个环境变数, 优先於内建表; 而 start_ppsspp.sh
+# 没有设它。固件侧已补上, 但要重编才生效, 这里先 bind-mount 一份补好的顶着。
+# ★自我失效★: 固件已经有那行就整段跳过, 不会变成下一个「旧补丁没撤」。
+GCDB="${ES4ALL_DIR}/gamecontrollerdb.txt"
+SP=/usr/bin/start_ppsspp.sh
+SP_FIX="${ES4ALL_DIR}/bin/start_ppsspp.sh"
+if [ -f "${GCDB}" ] && [ -f "${SP}" ] && ! grep -q 'SDL_GAMECONTROLLERCONFIG_FILE' "${SP}"; then
+	mkdir -p "$(dirname "${SP_FIX}")"
+	# 插在第一行的 shebang 之后, 确保在启动 ppsspp 之前就 export 出去。
+	{ head -1 "${SP}"
+	  echo "export SDL_GAMECONTROLLERCONFIG_FILE=\"${GCDB}\"   # es4all: 键位精灵透传"
+	  tail -n +2 "${SP}"
+	} > "${SP_FIX}"
+	chmod +x "${SP_FIX}"
+	if bash -n "${SP_FIX}" 2>/dev/null; then
+		mount --bind "${SP_FIX}" "${SP}" && log "已挂上修正版 start_ppsspp.sh(SDL 对照表透传)"
+	else
+		log "注意: 修正版 start_ppsspp.sh 语法检查未过, 维持原样"
+	fi
 fi
 
 # ---------------------------------------------------------------------------

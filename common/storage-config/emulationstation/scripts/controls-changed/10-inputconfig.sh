@@ -124,18 +124,16 @@ if [ -d /storage/joypads ] && [ -x "${ROOT_CFG}/es4all/bin/es-joypad-evdev.sh" ]
 		mkdir -p "${ROOT_CFG}/es4all/joypads"
 		cp -f "${OUT_DIR}"/*.cfg "${ROOT_CFG}/es4all/joypads/" 2>/dev/null
 
-		# ★PSP 独立模拟器(PPSSPP)也要跟着精灵走★
-		#   它不吃 RA 的 autoconfig, 自己一份 controls.ini。固件里原本放一份【写死的】,
-		#   Select/Start 是照某一颗手柄量出来的按钮 8/9 —— 换一颗手柄就整个没反应,
-		#   而且完全静默。既然精灵已经是唯一真相, 这里一并翻译过去。
-		PPSSPP_INI="/storage/.config/ppsspp/PSP/SYSTEM/controls.ini"
-		if [ -d "$(dirname "${PPSSPP_INI}")" ] && \
-		   [ -x "${ROOT_CFG}/es4all/bin/es-ppsspp-controls.sh" ]; then
-			log "controls-changed: 产生 PPSSPP controls.ini"
-			sh "${ROOT_CFG}/es4all/bin/es-ppsspp-controls.sh" "${ES_TEMP}" \
-				"${PPSSPP_INI}" "${ROOT_CFG}/emulationstation/es_settings.cfg" >> "${LOG}" 2>&1
-			# 同样存一份给开机还原用(膠水也会盖这个档)。
-			cp -f "${PPSSPP_INI}" "${ROOT_CFG}/es4all/ppsspp-controls.ini" 2>/dev/null
+		# ★PSP(PPSSPP)不吃按键编号, 只吃 SDL 的语意 —— 要透传得改 SDL 对照表★
+		#   PPSSPP 走 SDL GameController API: 它拿到的是 BACK/START/A/B 这种语意名,
+		#   哪一颗实体键算 BACK 由 gamecontrollerdb 决定, 与精灵无关。
+		#   所以改 controls.ini 里的数字改不动 SELECT/START(那份记的是语意码);
+		#   唯一的槓桿是覆盖 SDL 的对照表 —— SDL 认 SDL_GAMECONTROLLERCONFIG_FILE。
+		#   (实机: SDL 内建 xpad 是 back:b6 start:b7, 精灵记的是 select=7 start=6, 正好相反。)
+		if [ -x "${ROOT_CFG}/es4all/bin/es-sdl-gcdb.sh" ]; then
+			log "controls-changed: 产生 SDL 对照表(给 PPSSPP 这类走语意的模拟器)"
+			sh "${ROOT_CFG}/es4all/bin/es-sdl-gcdb.sh" "${ES_TEMP}" \
+				"${ROOT_CFG}/es4all/gamecontrollerdb.txt" >> "${LOG}" 2>&1
 		fi
 
 		# ★DC 独立模拟器(flycast)★: 走 flycast v4 原生 [combo], 不靠 gptokeyb。
