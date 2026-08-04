@@ -95,5 +95,35 @@ case "${M}" in
 	*) echo "★精灵没记到 select, SDL 对照表不产★"; exit 1 ;;
 esac
 
-printf '%s,%s,%splatform:Linux,\n' "${GUID}" "${NAME}" "${M}" > "${OUT}"
+LINE="$(printf '%s,%s,%splatform:Linux,' "${GUID}" "${NAME}" "${M}")"
+printf '%s\n' "${LINE}" > "${OUT}"
 echo "写入 ${OUT} (SDL 对照; back=$(btn select) start=$(btn start))"
+
+# ---------------------------------------------------------------------------
+# ★光靠环境变数不够 —— PPSSPP 会自己【再载入一次】db, 把我们的盖掉★
+# ---------------------------------------------------------------------------
+# 2026-08-04 实机: start_ppsspp.sh 已经 export 了 SDL_GAMECONTROLLERCONFIG_FILE,
+# SDL 也支援这个 hint(2.32.10), 但热键仍旧落在错的实体键上。真因是 ppsspp 二进位里
+# 写死了一条路径, 启动时自己呼叫 AddMappingsFromFile 再载入一次 ——
+#     /storage/.config/SDL-GameControllerDB/gamecontrollerdb.txt
+# 而 SDL 是【后载入的同 GUID 覆盖先前的】, 所以它稳赢过 hint。
+# (strings /usr/bin/ppsspp 直接看得到那条路径与 "gamecontrollerdb.txt missing?"。)
+#
+# → 把同一行也追加到那个档。出厂它是指向唯读 /usr/config 的符号连结,
+#   所以要先「实体化」成一份真档再改; 不动原始那份, 只是让 /storage 这边可写。
+# 追加在【最后】: 同 GUID 后来居上, 出厂那笔自然失效, 不必去删它。
+# 这个档 gptokeyb 也在用(它的 control.ini 指向同一条路径), 两边同一份真相反而更好。
+SYS_DB=/storage/.config/SDL-GameControllerDB/gamecontrollerdb.txt
+if [ -e "${SYS_DB}" ]; then
+	if [ -L "${SYS_DB}" ]; then
+		_src="$(readlink -f "${SYS_DB}")"
+		rm -f "${SYS_DB}" && cp -f "${_src}" "${SYS_DB}" || exit 0
+		echo "已把 ${SYS_DB} 从符号连结实体化(原本指向唯读固件)"
+	fi
+	# 幂等: 先删掉自己上次追加的那两行(标记 + 对照行), 别误删出厂的同 GUID 行。
+	# ★标记必须【另起一行】★: SDL 的解析器只认「整行以 # 开头」的注解,
+	#   把 `# es4all` 接在对照行尾巴会被当成一个多出来的栏位, 行为不可预期。
+	sed -i '/^# es4all-mapping$/,+1d' "${SYS_DB}"
+	printf '# es4all-mapping\n%s\n' "${LINE}" >> "${SYS_DB}"
+	echo "已追加同一行到 ${SYS_DB}(PPSSPP 自己会载入这个档)"
+fi

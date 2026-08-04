@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.04.13",
+  "version": "2026.08.04.14",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -13,7 +13,7 @@
     { "path": "common/bin/es-input-to-retroarch.sh", "md5": "4f6ae86a6b48f4bc48f70ca5fa33ee4e", "size": 9074 },
     { "path": "common/bin/es-joypad-evdevmap.sh", "md5": "6ecc8786c4b6693d0d3696a1aaf8a47f", "size": 1968 },
     { "path": "common/bin/es-joypad-evdev.sh", "md5": "7067602e194b2a0272ddfc746c19eb82", "size": 7113 },
-    { "path": "common/bin/es-sdl-gcdb.sh", "md5": "76eb084a2af0407396c74a2193351e54", "size": 5189 },
+    { "path": "common/bin/es-sdl-gcdb.sh", "md5": "30e05c3c738883b8897e7f4f81bd23f1", "size": 7204 },
     { "path": "common/bin/installtoemmc.sh", "md5": "13af80cb56fe0d4bfbd7345660c100f6", "size": 16179 },
     { "path": "common/bin/mergerfs", "md5": "1d06969fc790f34751e535b6c18a4385", "size": 2429024 },
     { "path": "common/bin/psp-hotkeys.sh", "md5": "29a75dcfdce1054e86fedab923d715ce", "size": 8769 },
@@ -40,7 +40,7 @@
     { "path": "rocknix/_common/bin/installtoemmc-engine.sh", "md5": "7e9cb23860f1c23488590df625602051", "size": 9251 },
     { "path": "rocknix/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "rocknix/_common/bin/setaudio.sh", "md5": "da949a31ca8f4d36f67fee0440d73f1b", "size": 3082 },
-    { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "6468f7607886c31dc98c21f7ac68ef41", "size": 10108 },
+    { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "405a90bd6d66df8b43189ff14d23cf7a", "size": 11217 },
     { "path": "rocknix/_common/storage-config/es4all/override/start_ppsspp.sh", "md5": "813e9cf41d366000fe8fb464fd20d4ae", "size": 8635 },
     { "path": "rocknix/_common/storage-config/flycast/flycast.gptk", "md5": "86b89bae7b6b545952002f94c41222af", "size": 412 },
     { "path": "rocknix/_common/storage-config/ppsspp/PSP/SYSTEM/controls.ini", "md5": "d02491d1207549280877fce245dca8d7", "size": 322 },

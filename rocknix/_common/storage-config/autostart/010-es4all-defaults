@@ -173,6 +173,24 @@ ra_set() {   # $1=键 $2=值; 幂等, 值已经对了就不写
 	log "RetroArch $1 -> $2"
 }
 
+# ---------------------------------------------------------------------------
+# ⑥ 确保 PPSSPP 那份 SDL 对照表还在
+# ---------------------------------------------------------------------------
+# ppsspp 二进位里写死了一条路径, 启动时自己再载入一次 db(覆盖环境变数给的那份):
+#     /storage/.config/SDL-GameControllerDB/gamecontrollerdb.txt
+# 出厂它是指向唯读固件的【符号连结】, 键位精灵跑完时会被实体化成真档并追加我们那行。
+# 这里只是保险: 万一它被还原成符号连结(换固件、还原出厂), 开机时补回去,
+# 否则 PSP 的 SELECT/START 会无声无息变回 SDL 内建的排法。
+SYS_DB=/storage/.config/SDL-GameControllerDB/gamecontrollerdb.txt
+OUR_DB="${ES4ALL_DIR}/gamecontrollerdb.txt"
+if [ -f "${OUR_DB}" ] && [ -e "${SYS_DB}" ] && ! grep -q '^# es4all-mapping$' "${SYS_DB}"; then
+	if [ -L "${SYS_DB}" ]; then
+		_s="$(readlink -f "${SYS_DB}")"; rm -f "${SYS_DB}"; cp -f "${_s}" "${SYS_DB}"
+	fi
+	{ echo '# es4all-mapping'; cat "${OUR_DB}"; } >> "${SYS_DB}"
+	log "补回 PPSSPP 用的 SDL 对照行"
+fi
+
 ra_set quit_press_twice false
 # 选单字体: 出厂 0.86 在电视上偏大(掌机的预设值直接搬过来的), 电视盒坐得远、
 # 解析度也高, 缩到 0.65 一页看得到的项目才够多。
