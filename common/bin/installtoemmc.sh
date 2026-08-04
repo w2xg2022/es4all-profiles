@@ -234,8 +234,30 @@ if [ -x /usr/bin/kmscon ]; then
 	sleep 1
 	[ -n "${PREV_VT}" ] && chvt "${PREV_VT}" 2>/dev/null
 else
+	# ★没有 kmscon 的发行版(ROCKNIX 就是)★ —— 不必为此补一个终端机套件:
+	# 我们只是要把几十行进度印出来, 用不到终端机模拟器的能力(字型、VT 管理、
+	# escape 序列)。核心的 fbcon 本来就绑在 framebuffer 上, 直接写 VT 就看得见。
+	#
+	# 前提是【DRM master 已经放掉】—— 前面已经 systemctl stop 掉 ES 服务
+	# (ROCKNIX 是 essway, 它连 sway 一起收掉), sway 一退出, fbcon 就把画面接回去。
+	# 判断这台机器行不行的客观依据(实机查证 MD1000/ROCKNIX):
+	#     cat /sys/class/vtconsole/vtcon*/name   -> 要有 "frame buffer device"
+	#     cat /sys/class/vtconsole/vtcon*/bind   -> 该行要是 1
+	#     ls /dev/fb0
+	# 三者都在就写得进去; 少了就只会是黑屏(那种机器才需要 kmscon 那类 DRM 原生终端)。
 	command -v ee_console >/dev/null 2>&1 && ee_console enable
-	/bin/sh "${RUNNER}" > /dev/tty0 2>&1
+
+	# 写到【当前活跃的那个 VT】而不是写死 tty1: 装置停在哪个 VT 各家不同,
+	# 写错就是「跑得好好的却什么都看不到」。/dev/tty0 = 当前 VT 的别名, 最保险。
+	TTY_OUT=/dev/tty0
+	[ -w "${TTY_OUT}" ] || TTY_OUT=/dev/console
+
+	# 清屏 + 关掉游标闪烁, 让进度看得清楚(纯 ANSI, 不需要终端机套件)。
+	printf '\033[2J\033[H\033[?25l' > "${TTY_OUT}" 2>/dev/null
+
+	/bin/sh "${RUNNER}" > "${TTY_OUT}" 2>&1
+
+	printf '\033[?25h' > "${TTY_OUT}" 2>/dev/null   # 游标还原, 免得留给下一个程式
 fi
 
 RC=$(cat /tmp/es4all-emmc.rc 2>/dev/null || echo 1)
