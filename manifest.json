@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.04.1",
+  "version": "2026.08.04.2",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
