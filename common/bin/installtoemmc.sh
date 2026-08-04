@@ -253,9 +253,28 @@ else
 	# 三者都在就写得进去; 少了就只会是黑屏(那种机器才需要 kmscon 那类 DRM 原生终端)。
 	command -v ee_console >/dev/null 2>&1 && ee_console enable
 
-	# 写到【当前活跃的那个 VT】而不是写死 tty1: 装置停在哪个 VT 各家不同,
-	# 写错就是「跑得好好的却什么都看不到」。/dev/tty0 = 当前 VT 的别名, 最保险。
-	TTY_OUT=/dev/tty0
+	# ★必须先 chvt 切到【别的】VT, 否则全程黑屏★(2026-08-04 实机三段对照测出来)
+	#   原本写到 /dev/tty0(= 当前 VT)。理由看起来很充分:「装置停在哪个 VT 各家不同,
+	#   写死 tty1 会看不到」。但实机上那正是黑屏的原因 ——
+	#   ★fbcon 不会自己重画 sway 待过的那个 VT★: 合成器退出后 DRM 没有把扫描输出
+	#   交还回去, 写进去的字确实到了 framebuffer, 就是没有被送上萤幕
+	#   (与 EmuELEC 那次 fbterm 同一种病: 有内容 ≠ 有扫描输出)。
+	#   三段对照(各 12 秒, 肉眼判读): A 写 tty0(=当前 tty1) 黑; B chvt 2 后写 tty2 【看得见】;
+	#   C 再 chvt 1 回来写 tty1 又变黑 —— 所以是「切换动作」逼 fbcon 重新 modeset,
+	#   而不是某个 VT 比较特别。
+	#   本机没有 kmscon(那是 EmuELEC 那条路), 这就是 ROCKNIX 这边唯一有效的作法。
+	PREV_VT="$(cat /sys/class/tty/tty0/active 2>/dev/null)"
+	PREV_VT="${PREV_VT#tty}"
+	WORK_VT=2
+	[ "${PREV_VT:-1}" = "2" ] && WORK_VT=3      # 万一本来就停在 tty2, 换一个
+	if chvt "${WORK_VT}" 2>/dev/null; then
+		sleep 1
+		TTY_OUT="/dev/tty${WORK_VT}"
+	else
+		# chvt 不成功就退回旧行为 —— 也许看不见, 但至少照跑。
+		log "注意: chvt 失败, 安装过程可能看不到画面"
+		TTY_OUT=/dev/tty0
+	fi
 	[ -w "${TTY_OUT}" ] || TTY_OUT=/dev/console
 
 	# 清屏 + 关掉游标闪烁, 让进度看得清楚(纯 ANSI, 不需要终端机套件)。
@@ -264,6 +283,10 @@ else
 	/bin/sh "${RUNNER}" > "${TTY_OUT}" 2>&1
 
 	printf '\033[?25h' > "${TTY_OUT}" 2>/dev/null   # 游标还原, 免得留给下一个程式
+
+	# 失败路径要把 VT 切回去, 否则 ES 起回来时人还停在空的 tty2 上 = 又是一片黑,
+	# 看起来像「装一装把系统弄坏了」。成功路径直接关机, 切不切都无所谓。
+	[ -n "${PREV_VT}" ] && chvt "${PREV_VT}" 2>/dev/null
 fi
 
 RC=$(cat /tmp/es4all-emmc.rc 2>/dev/null || echo 1)

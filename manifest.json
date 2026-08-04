@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.04.15",
+  "version": "2026.08.04.16",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -14,7 +14,7 @@
     { "path": "common/bin/es-joypad-evdevmap.sh", "md5": "6ecc8786c4b6693d0d3696a1aaf8a47f", "size": 1968 },
     { "path": "common/bin/es-joypad-evdev.sh", "md5": "7067602e194b2a0272ddfc746c19eb82", "size": 7113 },
     { "path": "common/bin/es-sdl-gcdb.sh", "md5": "30e05c3c738883b8897e7f4f81bd23f1", "size": 7204 },
-    { "path": "common/bin/installtoemmc.sh", "md5": "caee136de658ad721e9fbab5384da081", "size": 16768 },
+    { "path": "common/bin/installtoemmc.sh", "md5": "f569a0740cb6b73b70d548b55da7a1f7", "size": 18163 },
     { "path": "common/bin/mergerfs", "md5": "1d06969fc790f34751e535b6c18a4385", "size": 2429024 },
     { "path": "common/bin/psp-hotkeys.sh", "md5": "29a75dcfdce1054e86fedab923d715ce", "size": 8769 },
     { "path": "common/storage-config/emulationstation/scripts/controls-changed/10-inputconfig.sh", "md5": "c641bbb29bc287b7f24737dff98e7d64", "size": 8731 },
