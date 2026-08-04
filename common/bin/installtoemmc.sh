@@ -145,7 +145,13 @@ log "===== 开始: board=${BOARD} installer=${INSTALLER} ====="
 #   ROCKNIX 还有自己那套 automount。这个坑与发行版无关(是 udev + 重新分区),
 #   但挡法要按各家的单元名。写死一个名字的后果不是报错, 是**在另一边完全没挡到**
 #   —— 而那种失败要等到 mkfs 那一步才炸, 那时候分区表已经改掉了。
-AUTOMOUNT_UNITS="udevil-mount@.service automount.service"
+# ★别再手写单元名了 —— 写错不会报错, 是【在那一边完全没挡到】★
+#   2026-08-04 实机: 这里原本写 automount.service, 而 ROCKNIX 上它其实叫
+#   rocknix-automount.service, 於是这台机器上这道防线根本不存在。
+#   注解自己早就警告过这个风险, 结果还是踩了 —— 因为名字是「写死的资料」。
+#   改成【问系统要】: 凡是名字里有 automount 的单元, 加上 udevil 那支模板, 全部挡掉。
+AUTOMOUNT_UNITS="udevil-mount@.service $(systemctl list-unit-files --no-legend 2>/dev/null \
+	| awk '$1 ~ /automount\.service$/ {print $1}' | tr '\n' ' ')"
 AUTOMOUNT_MASKED=""
 for u in ${AUTOMOUNT_UNITS}; do
 	# ★先确认这个单元真的存在再 mask★: systemctl mask 对不存在的单元也会「成功」

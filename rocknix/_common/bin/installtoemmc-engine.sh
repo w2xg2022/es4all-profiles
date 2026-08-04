@@ -168,9 +168,23 @@ mkdir -p /tmp/erk /tmp/est /tmp/eb
 mount "${EMMC}p2" /tmp/erk || fail "could not mount ROCKNIX"
 echo "-- copying the OS to ROCKNIX --"
 for it in KERNEL KERNEL.md5 SYSTEM SYSTEM.md5 device_trees extlinux overlays; do
-  [ -e "$FLASH/$it" ] && cp -a "$FLASH/$it" /tmp/erk/
+  [ -e "$FLASH/$it" ] || continue
+  cp -a "$FLASH/$it" /tmp/erk/ || fail "could not copy $it"
 done
 sync
+
+# Verify what was actually written. The script runs without `set -e`, and SYSTEM
+# is over a gigabyte -- a copy that dies half way (full partition, flaky USB)
+# would otherwise sail through and the box would only fail at the next boot,
+# with nothing pointing at the real cause. /flash ships .md5 files; use them.
+echo "-- verifying the copy --"
+for it in KERNEL SYSTEM; do
+  [ -f "/tmp/erk/$it" ] && [ -f "/tmp/erk/$it.md5" ] || fail "$it or its .md5 is missing on ROCKNIX"
+  want=$(awk '{print $1; exit}' "/tmp/erk/$it.md5")
+  got=$(md5sum "/tmp/erk/$it" | awk '{print $1}')
+  [ "$want" = "$got" ] || fail "$it is corrupt (md5 $got, expected $want)"
+  echo "   $it OK"
+done
 
 # ------------------------- copy settings -> STORAGE (games/caches excluded) -------------------------
 mount "${EMMC}p3" /tmp/est || fail "could not mount STORAGE"
@@ -188,13 +202,34 @@ mkdir -p /tmp/est/roms /tmp/est/games-internal /tmp/est/games-external
 sync
 
 # ------------------------- refresh the p1 chainload kernel/dtb + TRIGGER -------------------------
-echo "-- refreshing eMMC p1 rocknix/Image + dtb --"
+#
+# !! The file names here are NOT ours to choose. p1 still carries Armbian's
+#    boot.scr, and that script loads two fixed paths:
+#        load ${devtype} ${devnum} ${addr} rocknix/KERNEL
+#        load ${devtype} ${devnum} ${addr} rocknix/dtb
+#    An earlier version wrote rocknix/Image and rocknix/<board>.dtb instead, so
+#    this whole step was a no-op: u-boot kept chainloading whatever KERNEL/dtb
+#    happened to be there from the first manual dual-boot setup. It looks fine
+#    for as long as those files happen to match, and turns into an unbootable
+#    box the moment SYSTEM is updated and the kernel is not -- silently, because
+#    nothing ever compares the two.
+#    If boot.scr is ever regenerated, these names must be changed together.
+echo "-- refreshing the eMMC p1 chainload (rocknix/KERNEL + rocknix/dtb) --"
 mount "${EMMC}p1" /tmp/eb || fail "could not mount p1"
 [ -d /tmp/eb/rocknix ] || mkdir -p /tmp/eb/rocknix
-cp -f "$FLASH/KERNEL" /tmp/eb/rocknix/Image
+cp -f "$FLASH/KERNEL" /tmp/eb/rocknix/KERNEL || fail "could not refresh the chainload kernel"
 DTB="$FLASH/device_trees/${COMPAT#rockchip,}.dtb"
 [ -f "$DTB" ] || DTB=$(ls "$FLASH"/device_trees/*.dtb 2>/dev/null | head -1)
-[ -n "$DTB" ] && [ -f "$DTB" ] && cp -f "$DTB" /tmp/eb/rocknix/"$(basename "$DTB")"
+[ -n "${DTB:-}" ] && [ -f "$DTB" ] || fail "no device tree found under $FLASH/device_trees"
+cp -f "$DTB" /tmp/eb/rocknix/dtb || fail "could not refresh the chainload dtb"
+# Make sure it is really on the card before we claim success: this is the one
+# copy that decides whether the box comes back up at all.
+sync
+[ "$(md5sum < "$FLASH/KERNEL")" = "$(md5sum < /tmp/eb/rocknix/KERNEL)" ] \
+  || fail "the chainload kernel on p1 does not match the one we just installed"
+
+# TRIGGER is a persistent marker, not a one-shot: boot.scr only does `test -e`.
+# Removing it would hand the box back to Armbian -- which no longer exists.
 [ -e /tmp/eb/rocknix/TRIGGER ] || : > /tmp/eb/rocknix/TRIGGER
 sync
 
