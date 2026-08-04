@@ -100,11 +100,29 @@ fstype_of() {
 #
 # ★顺序必须由上往下★: ${ROMS} 上那层 bind -> mergerfs 本体 -> 外接盘 -> 内盘的 bind。
 # 内盘那层留到最后 —— 它底下就是真正的 ROM 分区, 提早拆会变成卸不掉的残留。
+MERGE_UNIT=es4all-mergerfs
+
 teardown() {
-	[ "$(fstype_of "${ROMS}")" = "fuse.mergerfs" ] && umount "${ROMS}" 2>/dev/null
-	is_mounted "${MERGED}"   && umount "${MERGED}" 2>/dev/null
+	# mergerfs 现在跑在自己的 transient unit 里(见下), 先把它停掉再拆挂载。
+	command -v systemctl >/dev/null 2>&1 && {
+		systemctl stop "${MERGE_UNIT}.service" 2>/dev/null
+		systemctl reset-failed "${MERGE_UNIT}.service" 2>/dev/null
+	}
+	# ★用 -l(lazy)★: 守护进程若已经死了, 挂载点会是「Transport endpoint is not connected」,
+	# 一般的 umount 对这种殭尸挂载会失败, 拆不掉就永远卡在那里。
+	[ "$(fstype_of "${ROMS}")" = "fuse.mergerfs" ] && { umount "${ROMS}" 2>/dev/null || umount -l "${ROMS}" 2>/dev/null; }
+	is_mounted "${MERGED}"   && { umount "${MERGED}" 2>/dev/null || umount -l "${MERGED}" 2>/dev/null; }
 	is_mounted "${EXT_BASE}" && umount "${EXT_BASE}" 2>/dev/null
 	is_mounted "${INTERNAL}" && umount "${INTERNAL}" 2>/dev/null
+	return 0
+}
+
+# 挂载点是不是「殭尸」—— 挂载记录还在, 但 FUSE 守护进程已经死了。
+# 症状是任何存取都回 ENOTCONN(Transport endpoint is not connected),
+# 而 fstype 看起来仍然是 fuse.mergerfs, 光看 /proc/mounts 会以为一切正常。
+is_dead_fuse() {
+	[ "$(fstype_of "$1")" = "fuse.mergerfs" ] || return 1
+	ls "$1" >/dev/null 2>&1 && return 1
 	return 0
 }
 
@@ -135,6 +153,14 @@ if [ -z "${GAMES_DEV}" ]; then
 	fi
 	# 平常什么都不做时不留 log —— 那是绝大多数机器的常态, 每次开机写一行只会淹掉真正的讯息。
 	exit 0
+fi
+
+# ★先处理殭尸挂载★(2026-08-04 实机踩过, 症状是 ES「找不到任何系统」然后不断重启)
+# 守护进程死掉后挂载记录还在, fstype 仍是 fuse.mergerfs —— 若照下面那条「已经挂好了」
+# 的判断直接 exit, 就会把坏掉的挂载留给 ES, 而 ES 看到的是一个连 ls 都失败的 ROM 目录。
+if is_dead_fuse "${ROMS}"; then
+	log "★侦测到殭尸挂载(FUSE 守护进程已死)★, 先拆掉再重建"
+	teardown
 fi
 
 # 已经是 mergerfs 了(重跑) -> 什么都不做, 免得叠上去
@@ -236,7 +262,41 @@ fi
 # 会落在唯读分支上 -> ES 每次更新游玩次数都拿到 EROFS。mergerfs **不做 copy-up**,
 # 所以 RO 不像 overlayfs 那样有退路。写入本来在二选一模式下也是直接写那颗碟的。
 # category.create=ff + 内盘在前 => 新档案优先落在内盘(ext4), 不去戳 FAT。
-if ! "${MERGERFS}" -o "branches=${INTERNAL}=RW:${SRC}=RW,category.create=ff,use_ino,allow_other" "${MERGED}" >> "${LOG}" 2>&1; then
+MERGE_OPTS="branches=${INTERNAL}=RW:${SRC}=RW,category.create=ff,use_ino,allow_other"
+
+# ★mergerfs 必须跑在【自己的 unit】里, 不能留在 ES 服务的 cgroup 中★
+#   (2026-08-04 实机踩死: ES 反覆重启 + 画面「WE CAN'T FIND ANY SYSTEMS!」)
+#
+#   本脚本挂在 ES 服务的 ExecStartPre 上, 直接启动的 mergerfs 会成为【该服务 cgroup 的
+#   成员】。ES 只要退出一次(重启、当掉、切换设定), systemd 收拾 cgroup 就把 mergerfs
+#   一起杀掉 —— 挂载记录还在、fstype 仍是 fuse.mergerfs, 但守护进程没了,
+#   ROM 目录变成「Transport endpoint is not connected」, ES 一个系统都找不到就退出,
+#   然后 Restart=always 再拉起来, 无限循环。
+#   journal 里的原话: "Found left-over process (mergerfs) in control group while starting unit"
+#
+#   systemd-run 会把它放进一个**独立的 transient unit**, 与 ES 的生死完全脱钩,
+#   ES 重启几次都不影响挂载。★mergerfs 要加 -f★: 让它待在前景, 由该 unit 直接托管;
+#   否则它自己 fork 到背景, unit 立刻算结束, 又变回没人管的孤儿。
+if command -v systemd-run >/dev/null 2>&1; then
+	systemctl stop "${MERGE_UNIT}.service" 2>/dev/null
+	systemctl reset-failed "${MERGE_UNIT}.service" 2>/dev/null
+	systemd-run --unit="${MERGE_UNIT}" --collect \
+		--description="es4all 内外盘聚合(mergerfs)" \
+		"${MERGERFS}" -f -o "${MERGE_OPTS}" "${MERGED}" >> "${LOG}" 2>&1
+	# 等它真的挂上来(最多 10 秒)。systemd-run 是非同步的, 立刻 bind 会 bind 到空目录。
+	i=0
+	while [ "${i}" -lt 50 ]; do
+		is_mounted "${MERGED}" && break
+		i=$((i + 1))
+		sleep 0.2
+	done
+else
+	# 没有 systemd-run 的环境(理论上三个 target 都有 systemd, 这里只是保底)
+	log "注意: 找不到 systemd-run, mergerfs 只能跑在 ES 的 cgroup 里(ES 重启会断线)"
+	"${MERGERFS}" -o "${MERGE_OPTS}" "${MERGED}" >> "${LOG}" 2>&1
+fi
+
+if ! is_mounted "${MERGED}"; then
 	log "★mergerfs 挂载失败★, 只用内盘"
 	rollback
 	exit 0
