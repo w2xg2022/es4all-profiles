@@ -61,4 +61,32 @@ if [ -n "${AUDIO_OUT}" ] && [ -x "${ES4ALL_DIR}/bin/setaudio.sh" ]; then
 		log "注意: 音源输出套用失败(不影响开机)"
 fi
 
+# ---------------------------------------------------------------------------
+# ③ 把键位精灵的结果盖回 /storage/joypads
+# ---------------------------------------------------------------------------
+# ★固件里的 002-es4all-glue 每次开机都会无条件把一份【写死的】joypad 档复制到
+#   /tmp/joypads，把使用者自己跑精灵的结果整个盖掉★(2026-08-04 实机坐实:
+#   重开机后 /storage/joypads 那份的 md5 变回出厂值, RA 的组合键跟着全没了)。
+#
+#   那支膠水是我们自己早期埋的: 当时还没有「精灵 -> 转换器 -> joypad 档」这条链,
+#   只能在固件里塞一份对齐好的。链通了之后它就从【补救】变成【破坏】——
+#   与 A 版那份 A/B 互换 remap 同一种病: 旧补丁在新机制上线后没有撤掉。
+#
+#   固件侧已经把那段删掉, 但固件要重编才生效; 这里是不必重编的即时解药,
+#   而且顺序天生正确 —— /usr/bin/autostart 先跑 /usr/lib/autostart/common/*(膠水),
+#   再跑 /storage/.config/autostart/*(本档), 所以我们一定盖得回去。
+#
+#   备份来源: 钩子(10-inputconfig.sh)每次转换完会顺手存一份到这里。
+#   没有备份就什么都不做 —— 没跑过精灵的机器本来就该用发行版那份。
+JP_SAVE="${ES4ALL_DIR}/joypads"
+if [ -d "${JP_SAVE}" ] && [ -d /storage/joypads ]; then
+	for f in "${JP_SAVE}"/*.cfg; do
+		[ -f "${f}" ] || continue
+		if ! cmp -s "${f}" "/storage/joypads/$(basename "${f}")"; then
+			cp -f "${f}" "/storage/joypads/$(basename "${f}")" && \
+				log "还原键位档 $(basename "${f}")(被固件膠水盖掉了)"
+		fi
+	done
+fi
+
 exit 0

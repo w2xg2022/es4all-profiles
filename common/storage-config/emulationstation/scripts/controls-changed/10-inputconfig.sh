@@ -112,10 +112,17 @@ if [ -d /storage/joypads ] && [ -x "${ROOT_CFG}/es4all/bin/es-joypad-evdev.sh" ]
 		#
 		#   ★热键仍以键位精灵的结果为黄金标准★: 哪一颗当热键、印刷 X 在哪只有 ES 知道,
 		#   那支脚本会拿 es_input 的 SDL id 反查语意名、再对到实体按键。
-		log "controls-changed: 产生 evdev 编号的 joypad 档(ROCKNIX)"
+		log "controls-changed: 产生 udev 名的 joypad 档(ROCKNIX)"
 		sh "${ROOT_CFG}/es4all/bin/es-joypad-evdev.sh" "${ES_TEMP}" "${OUT_DIR}" \
 			"${ROOT_CFG}/emulationstation/es_settings.cfg" >> "${LOG}" 2>&1
-		log "controls-changed: evdev 版完成(exit=$?)"
+		log "controls-changed: udev 名版完成(exit=$?)"
+
+		# ★另存一份, 给开机时的还原用★
+		#   固件里的 002-es4all-glue 每次开机会无条件把一份写死的 joypad 档盖上来,
+		#   把精灵的结果整个抹掉(实机坐实: 重开机后组合键全没了)。
+		#   autostart 的 010-es4all-defaults 会拿这份备份盖回去 —— 它跑在膠水之后。
+		mkdir -p "${ROOT_CFG}/es4all/joypads"
+		cp -f "${OUT_DIR}"/*.cfg "${ROOT_CFG}/es4all/joypads/" 2>/dev/null
 	else
 		log "注意: 找不到 es_temporaryinput.cfg, 跳过 evdev 版"
 	fi
