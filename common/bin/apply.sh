@@ -267,8 +267,39 @@ dc_defaults() {
 	touch "${stamp}"
 }
 
+# ---------------------------------------------------------------------------
+# 开机音量预设
+# ---------------------------------------------------------------------------
+# ROCKNIX 的 autostart/050-audio 在【没有】audio.volume 时用写死的 60 —— 对电视盒
+# 偏小(它们透过 HDMI 推外接喇叭/电视, 与 ROCKNIX 常见的掌机不同), 而且那个 60
+# 首次开机就会被写回 system.cfg, 从此变成「使用者的值」, 固件端再怎么改预设都追不回来。
+#
+# 所以既有机器只能从设定档这一侧改。★仅此一次★: 标记档记住我们套过的值,
+# 使用者之后自己调的音量不会被开机流程覆盖(与 psp_defaults 同一套语意)。
+# 日后若调整建议值, 改本档的 WANT 即可重新套用一次。
+#
+# 固件侧另有一条互补的路: RK3566 的 options 宣告 DEVICE_VOLUME="80"(见 w2xg2022/rocknix
+# 54c2b366), 那条只对【全新刷机、还没有 audio.volume】的机器生效。两条不冲突:
+# 新机走固件预设, 既有机器走这里。
+audio_volume_default() {
+	local want=80
+	local stamp="${STAMP_DIR}/.audio-volume-applied"
+	[ "$(cat "${stamp}" 2>/dev/null)" = "${want}" ] && return 0
+
+	# 只有 ROCKNIX/EmuELEC 这类把音量记在 config store 的发行版才有这个键;
+	# ARMBIAN 侧音量走 ALSA 的 ~/.asoundrc, 不适用。
+	[ "${TARGET}" = "armbian" ] && return 0
+
+	conf_set audio.volume "${want}"
+	# 立刻套用一次, 免得非要重开机才听得出差别。ROCKNIX 有 /usr/bin/volume。
+	[ -x /usr/bin/volume ] && /usr/bin/volume "${want}" >/dev/null 2>&1
+	echo "${want}" > "${stamp}"
+	echo "es4all: audio volume default applied -> ${want}"
+}
+
 psp_defaults
 dc_defaults
+audio_volume_default
 selfmount_service
 selfmount_refresh
 input_hook
