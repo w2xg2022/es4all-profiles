@@ -103,9 +103,14 @@ SP_FIX="${ES4ALL_DIR}/bin/start_ppsspp.sh"
 if [ -f "${GCDB}" ] && [ -f "${SP}" ] && ! grep -q 'SDL_GAMECONTROLLERCONFIG_FILE' "${SP}"; then
 	mkdir -p "$(dirname "${SP_FIX}")"
 	# 插在第一行的 shebang 之后, 确保在启动 ppsspp 之前就 export 出去。
+	# 两处改动:
+	#   ① shebang 之后 export SDL 对照表(要在启动 ppsspp 之前就生效)
+	#   ② 固件写完自己那套和弦之后, 叫我们的 psp-hotkeys.sh 覆盖上去
+	#      —— 锚点用它自己那行 echo, 位置刚好在「写完和弦、还没启动」之间。
 	{ head -1 "${SP}"
 	  echo "export SDL_GAMECONTROLLERCONFIG_FILE=\"${GCDB}\"   # es4all: 键位精灵透传"
-	  tail -n +2 "${SP}"
+	  tail -n +2 "${SP}" | sed "/^ *echo \"PSP HOTKEYS set/a\\
+[ -x ${ES4ALL_DIR}/bin/psp-hotkeys.sh ] \&\& sh ${ES4ALL_DIR}/bin/psp-hotkeys.sh"
 	} > "${SP_FIX}"
 	chmod +x "${SP_FIX}"
 	if bash -n "${SP_FIX}" 2>/dev/null; then
