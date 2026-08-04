@@ -226,12 +226,36 @@ if [ -n "${OLD_MP}" ] && [ "${OLD_MP}" != "${EXT_BASE}" ]; then
 	umount "${OLD_MP}" 2>/dev/null
 fi
 
+# ★FAT/exFAT 一定要指定 utf8, 否则中文档名会变成一串问号★
+#   (2026-08-04 实机: 「战神 奥林匹斯之链 汉化版」显示成「?? ?????? ???」)
+#   不带选项时核心给的预设是 codepage=437,iocharset=ascii —— 档名里所有非 ASCII
+#   字元一律变 '?'。後果不只是难看:
+#     ① gamelist.xml 靠【路径】对应档案, 档名被打成 ? 就对不上 -> 刮削资料全失效,
+#        ES 只好显示那个烂掉的档名;
+#     ② 两个不同的中文档名可能被打成同一串 ?, 变成看起来重复的项目。
+#   而多数人的 ROM 碟正是在 Windows 上整理的 FAT/exFAT, 中文档名很常见。
+#   ★umask=000★: FAT 没有权限位, 由挂载参数决定; 不给的话是 root 拥有、其他人唯读,
+#   模拟器要在 ROM 旁边写存档就会失败(而且通常是静默失败)。
+FSTYPE=$(blkid -o value -s TYPE "${DEV}" 2>/dev/null)
+case "${FSTYPE}" in
+	vfat)  MNT_OPTS="utf8=1,umask=000" ;;
+	exfat) MNT_OPTS="iocharset=utf8,umask=000" ;;
+	ntfs|ntfs3) MNT_OPTS="umask=000" ;;   # ntfs 本来就是 UTF-16, 不需要 iocharset
+	*)     MNT_OPTS="" ;;                 # ext4 等 Linux 档案系统: 档名就是位元组, 不必转
+esac
+
 if ! is_mounted "${EXT_BASE}"; then
-	if ! mount "${DEV}" "${EXT_BASE}" 2>/dev/null; then
+	if [ -n "${MNT_OPTS}" ]; then
+		mount -o "${MNT_OPTS}" "${DEV}" "${EXT_BASE}" 2>/dev/null || mount "${DEV}" "${EXT_BASE}" 2>/dev/null
+	else
+		mount "${DEV}" "${EXT_BASE}" 2>/dev/null
+	fi
+	if ! is_mounted "${EXT_BASE}"; then
 		log "★挂不上 ${DEV}★, 只用内盘"
 		rollback
 		exit 0
 	fi
+	log "外接盘档案系统=${FSTYPE:-未知}, 挂载选项=${MNT_OPTS:-预设}"
 fi
 SRC="${EXT_BASE}"
 [ -d "${EXT_BASE}/roms" ] && SRC="${EXT_BASE}/roms"
