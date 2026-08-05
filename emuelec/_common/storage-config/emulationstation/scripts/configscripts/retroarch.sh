@@ -65,7 +65,24 @@ function onstart_retroarch_joystick() {
     _atebitdo_hack=0
     getAutoConf "8bitdo_hack" && _atebitdo_hack=1
 
-    iniConfig " = " "\"" "/tmp/tempconfig.cfg"
+    # NOTE(w2xg2022 2026-08-05): ★暂存档必须【每个行程一份】, 不能用写死的共用路径★
+    #
+    #   键位精灵存档时, 这支脚本会被【同时】叫两次:
+    #     ① ES 自己 —— es_input.cfg 里的 <inputAction type="onfinish">
+    #     ② es4all 的 controls-changed 钩子(10-inputconfig.sh)
+    #   两边共用 /tmp/tempconfig.cfg, 谁先跑完就把它 mv 到 /tmp/joypads/,
+    #   另一边接下来的 sed/mv 全部扑空:
+    #       sed: /tmp/tempconfig.cfg: No such file or directory
+    #       mv: can't rename '/tmp/tempconfig.cfg': No such file or directory
+    #   ★而失败的那一边【已经先把旧的 joypad 档改名成 .bak 了】★ ——
+    #   於是正本没了、新的也没产出, RA 直接显示「未配置」, 手柄进游戏就失效。
+    #   跑几次就叠几层 .bak(实机看到 .cfg.bak.bak.bak.bak)。
+    #
+    #   ⚠️ 钩子里原本的注解写「两条同时存在也没关系, 事件是同步执行的、
+    #      跑完才轮到 doOnFinish」—— ★那个假设在实机上不成立★(2026-08-05 MD1000/EmuELEC)。
+    #      与其去赌执行顺序, 不如让两边各用各的暂存档: $$ 是行程 PID, 天生不会撞。
+    ES4ALL_TMPCFG="/tmp/tempconfig.$$.cfg"
+    iniConfig " = " "\"" "${ES4ALL_TMPCFG}"
 
     v=${DEVICE_GUID:8:8}
     part1=$(echo ${v:6:2}${v:4:2}${v:2:2}${v:0:2})
@@ -470,10 +487,10 @@ function onend_retroarch_joystick() {
 
     # hotkey sanity check
     # remove hotkeys if there is no hotkey enable button
-    if ! grep -q "input_enable_hotkey" /tmp/tempconfig.cfg; then
+    if ! grep -q "input_enable_hotkey" "${ES4ALL_TMPCFG}"; then
         local key
         for key in input_toggle_fast_forward input_rewind input_fps_toggle input_volume_up input_volume_down input_state_slot_decrease input_state_slot_increase input_reset input_menu_toggle input_load_state input_save_state input_exit_emulator; do
-            sed -i "/${key}/d" /tmp/tempconfig.cfg
+            sed -i "/${key}/d" "${ES4ALL_TMPCFG}"
         done
     fi
 
@@ -495,8 +512,8 @@ function onend_retroarch_joystick() {
     if [[ -f "${dir}/${file}" ]]; then
         mv "${dir}/${file}" "${dir}/${file}.bak"
     fi
-    sed -i '/^[[:space:]]*$/d' "/tmp/tempconfig.cfg"
-    mv "/tmp/tempconfig.cfg" "${dir}/${file}"
+    sed -i '/^[[:space:]]*$/d' "${ES4ALL_TMPCFG}"
+    mv "${ES4ALL_TMPCFG}" "${dir}/${file}"
 }
 
 function onend_retroarch_keyboard() {

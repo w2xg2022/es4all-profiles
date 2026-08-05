@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.04.19",
+  "version": "2026.08.05.1",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -27,7 +27,7 @@
     { "path": "emuelec/_common/bin/installtoemmc-engine.sh", "md5": "8eaa4ccccd88f7907e26d725d603e715", "size": 32093 },
     { "path": "emuelec/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "emuelec/_common/bin/setaudio.sh", "md5": "3d777d942746c8d4a87d6fe9cbe05c13", "size": 3860 },
-    { "path": "emuelec/_common/storage-config/emulationstation/scripts/configscripts/retroarch.sh", "md5": "f389e29ef44a25a9a2a4fb7ae9be3fb6", "size": 18559 },
+    { "path": "emuelec/_common/storage-config/emulationstation/scripts/configscripts/retroarch.sh", "md5": "5871f66845016cbacc12bf5986db1828", "size": 19826 },
     { "path": "emuelec/_common/storage-config/es4all/override/ppsspp.sh", "md5": "dade7ee7be026ad86a71efda26e8551c", "size": 17775 },
     { "path": "emuelec/_common/storage-config/es4all/override/set_flycast_joy.sh", "md5": "dd1e5486a4d5f9d520899d7d6218a6fc", "size": 22296 },
     { "path": "emuelec/_common/storage-config/es4all/override/set_ppsspp_joy.sh", "md5": "eee9d12143d8e88ec57dfd3be2cfe657", "size": 7070 },
