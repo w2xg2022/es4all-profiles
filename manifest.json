@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "version": "2026.08.05.1",
+  "version": "2026.08.16.1",
   "min_es4all_version": "1.2pre",
   "files": [
     { "path": "armbian/_common/bin/setaudio.sh", "md5": "9020fdf98cff6ea2d3f1cf495b17e2b8", "size": 2332 },
@@ -40,7 +40,7 @@
     { "path": "rocknix/_common/bin/installtoemmc-engine.sh", "md5": "9ca5bc61690d223d7bc9123584925a86", "size": 13187 },
     { "path": "rocknix/_common/bin/selfmount.sh", "md5": "6d8ef691cdfd7fb33d229adb4b1e0202", "size": 3977 },
     { "path": "rocknix/_common/bin/setaudio.sh", "md5": "da949a31ca8f4d36f67fee0440d73f1b", "size": 3082 },
-    { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "405a90bd6d66df8b43189ff14d23cf7a", "size": 11217 },
+    { "path": "rocknix/_common/storage-config/autostart/010-es4all-defaults", "md5": "ab1190acb31db17d9d48c494aba76c66", "size": 15333 },
     { "path": "rocknix/_common/storage-config/es4all/override/start_ppsspp.sh", "md5": "813e9cf41d366000fe8fb464fd20d4ae", "size": 8635 },
     { "path": "rocknix/_common/storage-config/flycast/flycast.gptk", "md5": "86b89bae7b6b545952002f94c41222af", "size": 412 },
     { "path": "rocknix/_common/storage-config/ppsspp/PSP/SYSTEM/controls.ini", "md5": "d02491d1207549280877fce245dca8d7", "size": 322 },

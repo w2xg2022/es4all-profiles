@@ -113,7 +113,27 @@ if [ -f "${CFG}" ] && ! grep -q '^psp.graphics_backend=' "${CFG}"; then
 fi
 
 # ---------------------------------------------------------------------------
-# ⑤ 撤掉固件 setsettings.sh 里的 A/B 位置对齐 remap
+# ⑤ 修正固件/发行版的 setsettings.sh(两处, 用同一份 bind-mount 顶上)
+# ---------------------------------------------------------------------------
+#   ⑤-1 撤掉我们早期加的 A/B 位置对齐 remap(旧补丁, 见下)
+#   ⑤-2 让「热键 + 印刷 X/Y」不要被发行版改写(2026-08-16 实机)
+#
+# ⑤-2 的来龙去脉:
+#   使用者设的是 SELECT+X 叫选单、SELECT+Y 显示 FPS, 实机却【正好相反】。
+#   我们产的 joypad 档是对的(menu=2=印刷X, fps=3=印刷Y, 照精灵按下去那颗),
+#   问题出在 ROCKNIX 的 setsettings.sh: system.autohotkeys=1 时它每次启动游戏
+#   都会 source 那份 joypad 档、然后【用自己的算法覆写】进 retroarch.cfg:
+#       input_menu_toggle_btn = "${input_x_btn}"
+#       input_fps_toggle_btn  = "${input_y_btn}"
+#   而我们的 autoconfig 是【方位对齐】的 —— RetroPad X = 北 = 印刷 Y、
+#   RetroPad Y = 西 = 印刷 X, 于是这两行一写就把印刷 X/Y 对调了。
+#   (铁证: retroarch.cfg 里 fps=2 menu=3, 与我们那份 menu=2 fps=3 正好互换。)
+#
+#   修法是让它【优先用 joypad 档里已经有的值】, 没有才回到原本的算法:
+#       ${input_menu_toggle_btn:-${input_x_btn}}
+#   这样只有我们产的档(带热键行)会走新路径, 发行版出厂那些档行为完全不变。
+#   ★不改成「按 InvertButtons 取反」★: 那等于把同一条规则再抄一份到这里,
+#   而精灵的结果本来就已经写在 joypad 档里了, 直接用它才是单一真相。
 # ---------------------------------------------------------------------------
 # ★又是「旧补丁没随新机制撤掉」★(2026-08-04 实机: 游戏内 A/B 整个翻转)
 #   固件的 setsettings.sh 有我们加的 set_position_remap, 每次启动游戏都往
@@ -125,23 +145,45 @@ fi
 #   而且★自我失效★—— 固件更新后没有那个标记就整段跳过, 不会变成下一个旧补丁。
 SS=/usr/bin/setsettings.sh
 SS_FIX="${ES4ALL_DIR}/bin/setsettings.sh"
-if grep -q 'es4all-position-align' "${SS}" 2>/dev/null; then
-	mkdir -p "$(dirname "${SS_FIX}")"
+SS_WHY=""
+mkdir -p "$(dirname "${SS_FIX}")"
+cp -f "${SS}" "${SS_FIX}" 2>/dev/null
+
+# ⑤-1 ★旧补丁没随新机制撤掉★(2026-08-04 实机: 游戏内 A/B 整个翻转)
+#   固件的 setsettings.sh 有我们加的 set_position_remap, 每次启动游戏都往
+#   /storage/remappings/<核心>/<核心>.rmp 写 input_player1_btn_a="0" / btn_b="8"。
+#   当年那是必要的: joypad autoconfig 还是出厂那份(A 绑在南), 得靠这层翻转补位。
+#   现在精灵产的那份【本身就按位置对齐】(input_a_btn=东), 两层一叠就翻回去了。
+#   ★自我失效★: 固件更新后没有那个标记就跳过, 不会变成下一个旧补丁。
+if grep -q 'es4all-position-align' "${SS_FIX}" 2>/dev/null; then
 	# ★不能整行删★: 那三行 echo 分别待在 if 与 { } 里面, 删光就剩空的区块,
 	# bash 直接 syntax error(踩过一次: 「修正版语法检查未过」)。
 	# 把第一行换成 no-op(:) 再删另外两行, 结构就还在。
 	# 原本那句 sed -i 刻意【保留】—— 它正好会把 .rmp 里旧的残留行扫掉。
-	sed "s|echo '# es4all-position-align'|:|; \
-	     /echo 'input_player1_btn_a = \"0\"'/d; \
-	     /echo 'input_player1_btn_b = \"8\"'/d" "${SS}" > "${SS_FIX}"
+	sed -i "s|echo '# es4all-position-align'|:|; \
+	        /echo 'input_player1_btn_a = \"0\"'/d; \
+	        /echo 'input_player1_btn_b = \"8\"'/d" "${SS_FIX}"
+	SS_WHY="${SS_WHY}移除 A/B 翻转 remap; "
+fi
+
+# ⑤-2 热键的选单/FPS 改成【优先用 joypad 档里的值】(理由见上面那段)
+if grep -q 'input_menu_toggle_btn = "${input_x_btn}"' "${SS_FIX}" 2>/dev/null; then
+	sed -i 's|input_menu_toggle_btn = "${input_x_btn}"|input_menu_toggle_btn = "${input_menu_toggle_btn:-${input_x_btn}}"|; \
+	        s|input_fps_toggle_btn = "${input_y_btn}"|input_fps_toggle_btn = "${input_fps_toggle_btn:-${input_y_btn}}"|' "${SS_FIX}"
+	SS_WHY="${SS_WHY}选单/FPS 热键改用 joypad 档的值; "
+fi
+
+if [ -n "${SS_WHY}" ]; then
 	chmod +x "${SS_FIX}"
 	# ★语法检查一定要用 bash★: setsettings.sh 满是 function/local 这类 bashism,
 	# 拿 ash 检查会直接判失败, 结果永远挂不上去(而且看起来像「修正版有问题」)。
 	if bash -n "${SS_FIX}" 2>/dev/null; then
-		mount --bind "${SS_FIX}" "${SS}" && log "已挂上修正版 setsettings.sh(移除 A/B 翻转 remap)"
+		mount --bind "${SS_FIX}" "${SS}" && log "已挂上修正版 setsettings.sh(${SS_WHY})"
 	else
 		log "注意: 修正版 setsettings.sh 语法检查未过, 维持原样"
 	fi
+else
+	rm -f "${SS_FIX}"
 fi
 # 已经写进 .rmp 的那两行也要清掉 —— 它是累积写入的, 不清就一直在。
 for r in /storage/remappings/*/*.rmp; do
@@ -195,5 +237,27 @@ ra_set quit_press_twice false
 # 选单字体: 出厂 0.86 在电视上偏大(掌机的预设值直接搬过来的), 电视盒坐得远、
 # 解析度也高, 缩到 0.65 一页看得到的项目才够多。
 ra_set menu_scale_factor 0.650000
+
+# ---------------------------------------------------------------------------
+# ⑦ RA 选单的「确认/取消」要落在【印刷 A】那颗
+# ---------------------------------------------------------------------------
+# ★ROCKNIX 侧一直漏了这一项★(2026-08-16 实机: A 在南、X 在西的手柄, 在 RA 选单里
+#   按印刷 A 是【返回】、按印刷 B 才是【确认】, 使用者的说法是「AB 对调了」)。
+#
+# 成因与 EmuELEC 侧同一个(见 emuelec/.../setsettings.sh 的 menu_swap 注解):
+#   RA 选单的确认键 = (autoconfig 把 RetroPad A 绑到哪颗) × (swap)。
+#   我们的 autoconfig 是【方位对齐】的, RetroPad A 恒等于【东】那颗, 于是:
+#     Xbox 式 (InvertButtons=false, 印刷 A 在南) -> 确认落 RetroPad B -> swap=true
+#     任天堂式(InvertButtons=true , 印刷 A 在东) -> 确认落 RetroPad A -> swap=false
+#   => swap = !InvertButtons  ★取反, 不是直接等于★
+#
+# E 侧是在 setsettings.sh(每次启动游戏)里写的; R 的 setsettings.sh 不管这个键,
+# 也不会把它删掉(它只删自己管的那批), 所以放在开机写一次就够、而且不会被洗掉。
+ES_SETTINGS=/storage/.config/emulationstation/es_settings.cfg
+if [ -f "${ES_SETTINGS}" ] && grep -q '"InvertButtons" value="true"' "${ES_SETTINGS}"; then
+	ra_set menu_swap_ok_cancel_buttons false
+else
+	ra_set menu_swap_ok_cancel_buttons true
+fi
 
 exit 0
